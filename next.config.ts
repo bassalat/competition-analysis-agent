@@ -12,8 +12,6 @@ const nextConfig: NextConfig = {
   },
   // Ensure proper static generation
   trailingSlash: false,
-  // Output configuration for Netlify
-  output: 'standalone',
 };
 
 export default nextConfig;
