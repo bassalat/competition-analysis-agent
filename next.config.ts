@@ -10,8 +10,10 @@ const nextConfig: NextConfig = {
   experimental: {
     turbo: undefined
   },
-  // Ensure proper static generation
   trailingSlash: false,
+  images: {
+    unoptimized: true
+  }
 };
 
 export default nextConfig;
