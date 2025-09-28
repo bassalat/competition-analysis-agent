@@ -41,10 +41,7 @@ export async function POST(request: NextRequest) {
         // Setup update callback for real-time progress
         const onUpdate = async (update: ResearchUpdate) => {
           try {
-            const data = `data: ${JSON.stringify({
-              ...update,
-              type: 'update'
-            })}\n\n`;
+            const data = `data: ${JSON.stringify(update)}\n\n`;
 
             controller.enqueue(encoder.encode(data));
             console.log(`📡 SSE: ${update.step} - ${update.message}`);
