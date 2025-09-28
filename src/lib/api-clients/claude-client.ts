@@ -4,9 +4,8 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { config } from '@/lib/config';
-import { ApiResponse, ClaudeMessage, ClaudeRequest, StreamResponse, DiagnosticInfo } from '@/types/api';
+import { ApiResponse, ClaudeMessage, ClaudeRequest } from '@/types/api';
 import { withRateLimit, withTimeout, formatErrorMessage, validateApiKey } from './api-utils';
-import { globalCostTracker } from '@/lib/cost-tracker';
 
 export interface ClaudeOptions {
   maxTokens?: number;
@@ -27,18 +26,8 @@ export class ClaudeClient {
    * Get the appropriate max tokens for a given model
    */
   private getMaxTokensForModel(model: string, requestedTokens: number): number {
-    // Check if it's a Haiku model
-    if (model.includes('haiku')) {
-      return Math.min(requestedTokens, config.claude.haikuMaxTokens);
-    }
-
-    // For Sonnet and other models, use the requested amount or model limit
-    if (model.includes('sonnet')) {
-      return Math.min(requestedTokens, config.claude.sonnetMaxTokens);
-    }
-
-    // Default fallback - use conservative limit
-    return Math.min(requestedTokens, config.claude.haikuMaxTokens);
+    // Use the configured max tokens or a conservative default
+    return Math.min(requestedTokens, config.claude.maxTokens);
   }
 
   constructor() {
@@ -67,8 +56,7 @@ export class ClaudeClient {
     // Otherwise, try with fallback strategy
     const fallbackModels = [
       options.model || config.claude.model,
-      config.claude.analysisModel,
-      config.claude.quickModel,
+      config.claude.model,
     ];
 
     // Remove duplicates
@@ -146,7 +134,6 @@ export class ClaudeClient {
     }
 
     // Estimate cost before making request (for real-time tracking)
-    globalCostTracker.estimateCost(model, adjustedMaxTokens / 2, adjustedMaxTokens / 2);
 
     const operation = async (): Promise<string> => {
       if (stream && onProgress) {
@@ -155,7 +142,7 @@ export class ClaudeClient {
         const streamResponse = await this.client.messages.create({
           ...request,
           stream: true,
-        }) as AsyncIterable<StreamResponse>;
+        }) as AsyncIterable<{ type: string; delta?: { text?: string } }>;
 
         for await (const chunk of streamResponse) {
           if (chunk.type === 'content_block_delta' && chunk.delta?.text) {
@@ -205,13 +192,6 @@ export class ClaudeClient {
         // Track actual usage
         if ('usage' in response && response.usage) {
           console.log('📊 Token usage:', response.usage);
-          const usage = {
-            input_tokens: response.usage.input_tokens,
-            output_tokens: response.usage.output_tokens,
-            cache_creation_input_tokens: response.usage.cache_creation_input_tokens ?? undefined,
-            cache_read_input_tokens: response.usage.cache_read_input_tokens ?? undefined,
-          };
-          globalCostTracker.trackUsage(model, usage);
         }
 
         const textContent = 'content' in response ? response.content
@@ -272,7 +252,6 @@ export class ClaudeClient {
     };
 
     // Estimate cost before making request (for real-time tracking)
-    globalCostTracker.estimateCost(model, maxTokens / 2, maxTokens / 2);
 
     const operation = async (): Promise<string> => {
       const response = await withTimeout(
@@ -291,13 +270,7 @@ export class ClaudeClient {
 
       // Track actual usage
       if ('usage' in response && response.usage) {
-        const usage = {
-          input_tokens: response.usage.input_tokens,
-          output_tokens: response.usage.output_tokens,
-          cache_creation_input_tokens: response.usage.cache_creation_input_tokens ?? undefined,
-          cache_read_input_tokens: response.usage.cache_read_input_tokens ?? undefined,
-        };
-        globalCostTracker.trackUsage(model, usage);
+        console.log('📊 Token usage:', response.usage);
       }
 
       const textContent = response.content
@@ -479,7 +452,7 @@ Please return the extracted information in JSON format following the specified s
     try {
       // Use a direct API call to avoid circular dependency with complete()
       const response = await this.client.messages.create({
-        model: config.claude.quickModel, // Use fastest model for health check
+        model: config.claude.model, // Use configured model for health check
         max_tokens: 50,
         temperature: 0,
         messages: [{ role: 'user', content: testPrompt }]
@@ -519,7 +492,7 @@ Please return the extracted information in JSON format following the specified s
     connectionOk: boolean;
     modelsAvailable: string[];
     rateLimitsOk: boolean;
-    diagnosticInfo: DiagnosticInfo;
+    diagnosticInfo: Record<string, unknown>;
   }>> {
     const results = {
       apiKeyValid: false,
@@ -529,24 +502,22 @@ Please return the extracted information in JSON format following the specified s
       diagnosticInfo: {
         timestamp: new Date().toISOString(),
         configuredModel: config.claude.model,
-        quickModel: config.claude.quickModel,
-        analysisModel: config.claude.analysisModel,
-        error: undefined,
-        issue: undefined,
-      } as DiagnosticInfo
+        error: undefined as string | undefined,
+        issue: undefined as string | undefined,
+      }
     };
 
     try {
       // Test API key validity with minimal request
       await this.client.messages.create({
-        model: config.claude.quickModel,
+        model: config.claude.model,
         max_tokens: 10,
         messages: [{ role: 'user', content: 'Hi' }]
       });
 
       results.apiKeyValid = true;
       results.connectionOk = true;
-      results.modelsAvailable = [config.claude.quickModel];
+      results.modelsAvailable = [config.claude.model];
       results.rateLimitsOk = true;
 
       return {

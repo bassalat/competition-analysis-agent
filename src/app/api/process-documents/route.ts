@@ -11,8 +11,8 @@ import { validateConfig } from '@/lib/config';
  * Claude-powered document processing and competitor extraction
  */
 async function extractCompetitorsWithClaude(files: File[], accuracyMode: 'economy' | 'accuracy' = 'economy') {
-  const { getClaudeClient } = await import('@/lib/api-clients');
-  const claude = getClaudeClient();
+  const { ClaudeClient } = await import('@/lib/api-clients/claude-client');
+  const claude = new ClaudeClient();
 
   const competitors: Array<{ name: string; website: string; description: string; source: string; confidence: number }> = [];
 
@@ -137,18 +137,11 @@ IMPORTANT: Return a complete JSON response with ALL competitors found (however m
 
       // Configure model and parameters based on accuracy mode
       const config = (await import('@/lib/config')).config;
-      const modelConfig = accuracyMode === 'accuracy'
-        ? {
-            model: config.claude.standardModel, // Sonnet 4 for accuracy
-            maxTokens: 8000,
-            temperature: 0.2,
-            description: 'single-pass Sonnet 4'
-          }
-        : {
-            model: config.claude.quickModel, // Haiku 3.5 for economy
+      const modelConfig = {
+            model: config.claude.model, // Use configured model
             maxTokens: 8192,
             temperature: 0.3,
-            description: 'multi-pass Haiku 3.5'
+            description: 'document processing'
           };
 
       console.log(`🎯 Using ${modelConfig.description} for ${file.name}`);
@@ -249,7 +242,7 @@ Return ONLY new competitors in JSON format:
             }], {
               maxTokens: 4000,
               temperature: 0.3,
-              model: (await import('@/lib/config')).config.claude.quickModel,
+              model: (await import('@/lib/config')).config.claude.model,
             });
 
             if (secondResponse.success && secondResponse.data) {
@@ -349,7 +342,7 @@ Return ANY additional companies in JSON format:
             }], {
               maxTokens: 4000,
               temperature: 0.2,
-              model: (await import('@/lib/config')).config.claude.quickModel,
+              model: (await import('@/lib/config')).config.claude.model,
             });
 
             if (thirdResponse.success && thirdResponse.data) {

@@ -149,35 +149,58 @@ The system uses a streamlined 5-step process targeting ~$0.20 per competitor:
 
 ## Architecture Patterns
 
+### Simplified SSE Architecture (Current: Commit 29af79f)
+The system implements a **unified SSE event model** for reliable real-time progress tracking:
+
+**Single Event Type**: All updates use `type: 'update'` with complete state:
+```javascript
+{
+  type: 'update',
+  progress: 45,
+  message: 'PureVPN: Scraping content',
+  results: [{ competitor, currentStep, searchQueries, searchResults, urlsFound, contentScraped, finalReport, cost, isComplete, error }],
+  isComplete: false,
+  timestamp: '2025-09-28T...'
+}
+```
+
+**Key Benefits**:
+- **Eliminates "stuck at 99%" issues** - Complete state sent every update
+- **Real-time competitor cards** - Live progress counters during analysis
+- **Simplified debugging** - Single data flow instead of complex event choreography
+- **Production ready** - Reduced failure points and timeout handling
+
 ### Simplified Engine Architecture
 The system uses a single, streamlined engine instead of multiple complex engines:
 
 **SimplifiedCompetitorEngine** (`src/lib/engines/simplified-competitor-engine.ts`):
-- Implements the 5-step analysis process
+- Implements the 5-step analysis process with real-time callbacks
 - Returns all intermediate data for full transparency
 - Costs ~$0.20 per competitor analysis
 - Uses markdown format throughout (no complex JSON structures)
+- Provides step-by-step callbacks for live UI updates
 
 ### Data Flow
 1. **Document Upload** → Extract business context and competitors
-2. **Query Generation** → Claude generates 12 targeted search queries
-3. **Search & Prioritization** → Serper searches + Claude URL selection
-4. **Content Extraction** → Firecrawl scrapes prioritized URLs
-5. **Report Generation** → Claude synthesizes final intelligence report
+2. **Query Generation** → Claude generates 12 targeted search queries → **UI Update**
+3. **Search & Prioritization** → Serper searches + Claude URL selection → **UI Update**
+4. **Content Extraction** → Firecrawl scrapes prioritized URLs → **UI Update**
+5. **Report Generation** → Claude synthesizes final intelligence report → **UI Update**
 
 ### Transparency Pattern
 All intermediate data is preserved and returned to users:
-- `searchQueries` - Generated search terms
-- `searchResults` - Raw search results from Serper
-- `prioritizedUrls` - URLs selected for scraping
-- `scrapedContent` - Raw content from Firecrawl
-- `finalReport` - Synthesized competitive intelligence
+- `searchQueries` - Generated search terms (live counter)
+- `searchResults` - Raw search results from Serper (live counter)
+- `prioritizedUrls` - URLs selected for scraping (live counter)
+- `scrapedContent` - Raw content from Firecrawl (live counter)
+- `finalReport` - Synthesized competitive intelligence (preview + full)
 
 ### Error Handling Strategy
-- Configuration validation on startup
-- Graceful API timeout handling (10 minute limit)
+- Configuration validation on startup with pre-flight API health checks
+- Graceful API timeout handling (20 minute limit for streaming)
 - Rate limiting with retry logic
 - Specific error messages for common issues (missing API keys, file size limits)
+- Stream connection resilience with reconnection logic
 
 ## File Processing Capabilities
 - **Supported**: PDF, DOCX, DOC, TXT, RTF, HTML, CSV, JSON
@@ -188,6 +211,13 @@ All intermediate data is preserved and returned to users:
 
 ### Production Analysis Mode
 The `/api/analyze` and `/api/analyze-stream` endpoints are fully functional and integrate with all configured external APIs (Claude, Serper, Firecrawl) for comprehensive competitive intelligence analysis.
+
+**Streaming Architecture (Commit 29af79f)**:
+- Single `update` event type with complete state transmission
+- Real-time competitor progress cards with live counters
+- 20-minute timeout handling for long analyses
+- Pre-flight API health checks before analysis starts
+- Transparent intermediate data display during processing
 
 ### TypeScript Configuration
 - Strict type checking enabled
@@ -246,3 +276,15 @@ The system implements a streamlined 5-step competitive intelligence workflow:
 - **Markdown Native**: Uses markdown throughout for better readability
 
 This represents a simplified, cost-effective competitive intelligence platform optimized for speed and transparency.
+
+## Current Architecture State
+
+**Active Commit**: `29af79f` - "Simplify SSE architecture with single update event for reliable real-time progress"
+
+This commit represents the stable, simplified architecture that resolves production timeout issues:
+- **Backend**: Single SSE event type (`update`) with complete state transmission
+- **Frontend**: Unified event handler replacing complex multi-event processing
+- **Real-time UI**: Live competitor progress cards showing search queries, results, URLs, and content counters
+- **Reliability**: Eliminates "stuck at 99%" issues through complete state updates
+
+**Note**: Later commits (CSP fixes, ReactMarkdown changes) were reverted to maintain this stable architecture.
