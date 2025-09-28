@@ -156,6 +156,16 @@ export abstract class BaseResearcher {
       ).length;
 
       console.log(`✅ Successfully scraped ${scrapedCount} documents`);
+
+      // Send update with scraped count
+      if (scrapedCount > 0) {
+        await this.sendUpdate(
+          state,
+          `Scraped ${scrapedCount} documents`,
+          { documentsScraped: scrapedCount },
+          onUpdate
+        );
+      }
     } catch (error) {
       console.error('❌ Scraping error:', error);
     }

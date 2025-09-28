@@ -174,6 +174,12 @@ export function CompetitorResearchCard({
         if (update.data.documentsScraped) {
           newProgress.liveCounters.documentsScraped += update.data.documentsScraped;
         }
+        if (update.data.briefingsGenerated) {
+          newProgress.liveCounters.briefingsGenerated = update.data.briefingsGenerated.length;
+        }
+        if (update.data.totalBriefings) {
+          newProgress.liveCounters.briefingsGenerated = update.data.totalBriefings;
+        }
       }
 
       // Handle completion
