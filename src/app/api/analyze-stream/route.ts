@@ -24,6 +24,16 @@ const MAX_COMPETITORS = 50;
 // Request timeout (30 minutes for streaming analysis)
 const REQUEST_TIMEOUT = 30 * 60 * 1000;
 
+// Type definition for controller errors
+interface ControllerError extends Error {
+  code?: string;
+}
+
+// Type guard to safely check if error is a controller error
+const isControllerError = (error: unknown): error is ControllerError => {
+  return error instanceof Error;
+};
+
 export async function POST(request: NextRequest) {
   console.log('Starting simplified streaming competitive intelligence analysis...');
 
@@ -148,7 +158,7 @@ export async function POST(request: NextRequest) {
           } catch (error) {
             console.warn('Failed to send data:', error);
             // Mark as closed if controller errors occur
-            if ((error as any)?.code === 'ERR_INVALID_STATE' || (error as any)?.message?.includes('Controller is already closed')) {
+            if (isControllerError(error) && (error.code === 'ERR_INVALID_STATE' || error.message?.includes('Controller is already closed'))) {
               isClosed = true;
             } else {
               isClosed = true;
@@ -166,7 +176,7 @@ export async function POST(request: NextRequest) {
           } catch (error) {
             console.warn('Failed to send keep-alive:', error);
             // Mark as closed if controller errors occur
-            if ((error as any)?.code === 'ERR_INVALID_STATE' || (error as any)?.message?.includes('Controller is already closed')) {
+            if (isControllerError(error) && (error.code === 'ERR_INVALID_STATE' || error.message?.includes('Controller is already closed'))) {
               isClosed = true;
             }
           }
