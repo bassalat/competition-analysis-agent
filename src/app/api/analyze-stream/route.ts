@@ -151,9 +151,27 @@ export async function POST(request: NextRequest) {
           }
         };
 
+        // Helper to send keep-alive/flush messages for Railway proxy handling
+        const sendKeepAlive = () => {
+          if (isClosed) return;
+          try {
+            // Send a comment (keeps connection alive but invisible to client)
+            const keepAlive = ": keep-alive\n\n";
+            controller.enqueue(encoder.encode(keepAlive));
+          } catch (error) {
+            console.warn('Failed to send keep-alive:', error);
+          }
+        };
+
+        // Set up periodic keep-alive messages to prevent proxy buffering
+        const keepAliveInterval = setInterval(() => {
+          sendKeepAlive();
+        }, 2000); // Every 2 seconds
+
         // Set up timeout for the analysis
         const timeoutId = setTimeout(() => {
           if (!isClosed) {
+            clearInterval(keepAliveInterval);
             sendData({
               type: 'timeout',
               message: 'Analysis timeout - process taking too long',
@@ -300,29 +318,105 @@ export async function POST(request: NextRequest) {
             clearTimeout(timeoutId);
 
             if (!isClosed) {
+              // Step 1: Send pre-completion signal to prepare frontend
               sendData({
-                type: 'complete',
-                message: `Analysis completed! ${successfulAnalyses}/${competitors.length} successful. Avg cost: $${avgCostPerCompetitor.toFixed(4)}/competitor`,
-                progress: 100,
-                data: finalData,
+                type: 'progress',
+                progress: 99,
+                message: 'Analysis complete, preparing final report...',
                 timestamp: new Date().toISOString()
               });
+              sendKeepAlive(); // Force a flush
 
-              // Add delay and explicit end marker to ensure proper delivery in production
+              // Step 2: Send completion metadata first (smaller payload)
               setTimeout(() => {
                 if (!isClosed) {
-                  try {
-                    // Send end-of-stream marker
-                    const endMessage = "event: end\ndata: {}\n\n";
-                    controller.enqueue(encoder.encode(endMessage));
-                  } catch (error) {
-                    console.warn('Failed to send end marker:', error);
-                  }
-                  unsubscribeCosts();
-                  controller.close();
-                  isClosed = true;
+                  sendData({
+                    type: 'completion_metadata',
+                    message: `Analysis completed! ${successfulAnalyses}/${competitors.length} successful. Avg cost: $${avgCostPerCompetitor.toFixed(4)}/competitor`,
+                    summary: finalData.summary,
+                    timestamp: new Date().toISOString()
+                  });
+                  sendKeepAlive();
                 }
-              }, 500); // 500ms delay to ensure data is flushed
+              }, 200);
+
+              // Step 3: Send the complete data in chunks to avoid buffering
+              setTimeout(() => {
+                if (!isClosed) {
+                  // Break finalData into smaller chunks if it's large
+                  const dataSize = JSON.stringify(finalData).length;
+                  if (dataSize > 50000) { // If larger than 50KB
+                    // Send competitors data in smaller batches
+                    const competitors = finalData.competitors || [];
+                    const batchSize = Math.max(1, Math.floor(competitors.length / 3));
+
+                    for (let i = 0; i < competitors.length; i += batchSize) {
+                      const batch = competitors.slice(i, i + batchSize);
+                      setTimeout(() => {
+                        if (!isClosed) {
+                          sendData({
+                            type: 'data_chunk',
+                            chunkIndex: Math.floor(i / batchSize),
+                            totalChunks: Math.ceil(competitors.length / batchSize),
+                            data: { competitors: batch },
+                            timestamp: new Date().toISOString()
+                          });
+                          sendKeepAlive();
+                        }
+                      }, i * 100); // Stagger chunks by 100ms
+                    }
+
+                    // Send final completion after all chunks
+                    setTimeout(() => {
+                      if (!isClosed) {
+                        sendData({
+                          type: 'complete',
+                          progress: 100,
+                          chunked: true,
+                          timestamp: new Date().toISOString()
+                        });
+                      }
+                    }, competitors.length * 100 + 500);
+                  } else {
+                    // Send complete data if it's small enough
+                    sendData({
+                      type: 'complete',
+                      progress: 100,
+                      data: finalData,
+                      timestamp: new Date().toISOString()
+                    });
+                  }
+                }
+              }, 500);
+
+              // Step 4: Aggressive cleanup with multiple flush attempts
+              setTimeout(() => {
+                if (!isClosed) {
+                  clearInterval(keepAliveInterval);
+
+                  // Multiple flush attempts with increasing delays
+                  const flushAttempts = [100, 300, 500, 1000];
+                  flushAttempts.forEach((delay, index) => {
+                    setTimeout(() => {
+                      if (!isClosed) {
+                        try {
+                          sendKeepAlive();
+                          if (index === flushAttempts.length - 1) {
+                            // Final cleanup
+                            const endMessage = "event: end\ndata: {}\n\n";
+                            controller.enqueue(encoder.encode(endMessage));
+                            unsubscribeCosts();
+                            controller.close();
+                            isClosed = true;
+                          }
+                        } catch (error) {
+                          console.warn(`Failed flush attempt ${index + 1}:`, error);
+                        }
+                      }
+                    }, delay);
+                  });
+                }
+              }, 1500); // Start flush sequence after 1.5s
             }
 
           } catch (error) {
@@ -330,6 +424,7 @@ export async function POST(request: NextRequest) {
             console.error('Streaming analysis failed:', error);
 
             if (!isClosed) {
+              clearInterval(keepAliveInterval);
               sendData({
                 type: 'error',
                 message: error instanceof Error ? error.message : 'Analysis failed',
@@ -356,8 +451,17 @@ export async function POST(request: NextRequest) {
         'Content-Type': 'text/event-stream; charset=utf-8',
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Connection': 'keep-alive',
-        'X-Accel-Buffering': 'no', // Disable nginx buffering
+        'Transfer-Encoding': 'chunked',
+        // Railway/nginx proxy buffering prevention
+        'X-Accel-Buffering': 'no',
+        'X-Proxy-Buffering': 'no',
+        'Proxy-Buffering': 'no',
+        'Buffering': 'no',
+        // Additional Railway-specific headers
         'X-Content-Type-Options': 'nosniff',
+        'X-Railway-No-Buffer': 'true',
+        'X-Stream-Output': 'true',
+        // CORS headers
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type',
