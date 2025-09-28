@@ -298,6 +298,8 @@ export default function AnalyzePage() {
       const chunkedData: { competitors: AnalysisData[] } = { competitors: [] };
       let expectedChunks = 0;
       let receivedChunks = 0;
+      let storedSummary: Record<string, unknown> = {}; // Store summary from completion_metadata
+      let storedBusinessContext: unknown = undefined; // Store business context
 
       // Enhanced timeout with retry mechanism
       let retryCount = 0;
@@ -474,6 +476,11 @@ export default function AnalyzePage() {
 
                   case 'completion_metadata':
                     addLog('info', 'Received completion metadata', data);
+                    // CRITICAL FIX: Store summary data for use with chunked delivery
+                    if (data.summary) {
+                      storedSummary = data.summary;
+                      addLog('info', `Stored summary data with ${Object.keys(storedSummary).length} fields`);
+                    }
                     updateState({
                       progress: 99,
                       currentStage: data.message
@@ -507,18 +514,39 @@ export default function AnalyzePage() {
                     let summary: Record<string, unknown> = {};
 
                     if (data.chunked && chunkedData.competitors.length > 0) {
-                      // Use accumulated chunked data
+                      // Use accumulated chunked data + stored summary
                       competitorAnalyses = chunkedData.competitors;
-                      addLog('success', `Analysis completed using chunked delivery (${competitorAnalyses.length} competitors)`);
+                      // CRITICAL FIX: Use stored summary from completion_metadata OR data.summary
+                      summary = (Object.keys(storedSummary).length > 0) ? storedSummary : (data.data?.summary || {});
+                      if (data.data?.businessContext) {
+                        storedBusinessContext = data.data.businessContext;
+                      }
+                      addLog('success', `Analysis completed using chunked delivery (${competitorAnalyses.length} competitors, summary with ${Object.keys(summary).length} fields)`);
                     } else if (data.data) {
                       // Use direct data (fallback for smaller datasets)
                       competitorAnalyses = data.data.competitors || [];
                       summary = data.data.summary || {};
+                      storedBusinessContext = data.data.businessContext;
                       addLog('success', `Analysis completed using direct delivery (${competitorAnalyses.length} competitors)`);
                     } else {
-                      // Final fallback - completion signal only
-                      addLog('success', 'Analysis completed successfully');
+                      // Final fallback - use whatever data we have stored
+                      if (chunkedData.competitors.length > 0) {
+                        competitorAnalyses = chunkedData.competitors;
+                        summary = storedSummary;
+                        addLog('success', `Analysis completed using stored chunked data (${competitorAnalyses.length} competitors)`);
+                      } else {
+                        addLog('success', 'Analysis completed successfully');
+                      }
                     }
+
+                    // DATA INTEGRITY LOGGING - Track what we received
+                    addLog('info', `DATA INTEGRITY CHECK:
+                      - Competitors: ${competitorAnalyses.length}
+                      - Summary fields: ${Object.keys(summary).length}
+                      - Chunked delivery: ${data.chunked}
+                      - Stored summary fields: ${Object.keys(storedSummary).length}
+                      - Business context: ${storedBusinessContext ? 'present' : 'missing'}
+                      - Expected chunks: ${expectedChunks}, Received: ${receivedChunks}`);
 
                     // Only update UI if we have analysis data or this is final confirmation
                     if (competitorAnalyses.length > 0 || !state.analysisResults) {
@@ -539,7 +567,7 @@ export default function AnalyzePage() {
                             scrapedContent: comp.scrapedContent,
                             metadata: comp.metadata
                           })),
-                          businessContext: data.data?.businessContext,
+                          businessContext: storedBusinessContext as BusinessContext | undefined,
                           overallInsights: {
                             keyTrends: ['Market analysis completed'],
                             competitiveThreats: ['Competitive intelligence gathered'],

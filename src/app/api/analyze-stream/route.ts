@@ -366,13 +366,19 @@ export async function POST(request: NextRequest) {
                       }, i * 100); // Stagger chunks by 100ms
                     }
 
-                    // Send final completion after all chunks
+                    // Send final completion after all chunks - INCLUDE SUMMARY DATA
                     setTimeout(() => {
                       if (!isClosed) {
                         sendData({
                           type: 'complete',
                           progress: 100,
                           chunked: true,
+                          // CRITICAL FIX: Include summary data for chunked delivery
+                          data: {
+                            summary: finalData.summary // Ensure summary is available for frontend
+                            // Note: businessContext is not part of finalData type, handle separately if needed
+                          },
+                          message: `Analysis completed! ${successfulAnalyses}/${competitors.length} successful. Avg cost: $${avgCostPerCompetitor.toFixed(4)}/competitor`,
                           timestamp: new Date().toISOString()
                         });
                       }
