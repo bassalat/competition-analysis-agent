@@ -372,9 +372,41 @@ export async function POST(request: NextRequest) {
                 if (!isClosed) {
                   // Break finalData into smaller chunks if it's large
                   const dataSize = JSON.stringify(finalData).length;
+                  console.log(`Final data size: ${dataSize} bytes, competitors: ${competitors.length}, chunking: ${dataSize > 50000}`);
                   if (dataSize > 50000) { // If larger than 50KB
                     // Send competitors data in smaller batches
                     const competitors = finalData.competitors || [];
+
+                    // Special case for single competitor - ensure data delivery
+                    if (competitors.length === 1) {
+                      console.log('Single competitor with large data, using hybrid delivery approach');
+                      // Send as chunk for consistency but also include in complete event
+                      sendData({
+                        type: 'data_chunk',
+                        chunkIndex: 0,
+                        totalChunks: 1,
+                        data: { competitors: competitors },
+                        timestamp: new Date().toISOString()
+                      });
+                      sendKeepAlive();
+
+                      // Also send complete event with full data as backup
+                      setTimeout(() => {
+                        if (!isClosed) {
+                          console.log('Sending hybrid complete event with full data');
+                          sendData({
+                            type: 'complete',
+                            progress: 100,
+                            chunked: true,
+                            data: finalData, // Include FULL data for single competitor
+                            message: `Analysis completed! ${successfulAnalyses}/${competitors.length} successful. Avg cost: $${avgCostPerCompetitor.toFixed(4)}/competitor`,
+                            timestamp: new Date().toISOString()
+                          });
+                        }
+                      }, 800); // Extra delay to ensure chunk is processed first
+                      return; // Exit early to avoid normal chunked logic
+                    }
+
                     const batchSize = Math.max(1, Math.floor(competitors.length / 3));
 
                     for (let i = 0; i < competitors.length; i += batchSize) {

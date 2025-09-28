@@ -490,13 +490,14 @@ export default function AnalyzePage() {
                     break;
 
                   case 'data_chunk':
-                    addLog('info', `Received data chunk ${data.chunkIndex + 1}/${data.totalChunks}`);
+                    addLog('info', `Received data chunk ${data.chunkIndex + 1}/${data.totalChunks} with ${data.data?.competitors?.length || 0} competitors`);
                     expectedChunks = data.totalChunks;
                     receivedChunks++;
 
                     // Merge chunk data
                     if (data.data?.competitors) {
                       chunkedData.competitors = [...chunkedData.competitors, ...data.data.competitors];
+                      addLog('info', `Accumulated ${chunkedData.competitors.length} total competitors from chunks`);
                     }
 
                     // Update progress based on chunks received
@@ -515,15 +516,16 @@ export default function AnalyzePage() {
                     let competitorAnalyses: AnalysisData[] = [];
                     let summary: Record<string, unknown> = {};
 
-                    if (data.chunked && chunkedData.competitors.length > 0) {
-                      // Use accumulated chunked data + stored summary
-                      competitorAnalyses = chunkedData.competitors;
+                    if (data.chunked && (chunkedData.competitors.length > 0 || data.data?.competitors)) {
+                      // Use accumulated chunked data + stored summary, with fallback to direct data
+                      competitorAnalyses = chunkedData.competitors.length > 0 ? chunkedData.competitors : (data.data?.competitors || []);
                       // CRITICAL FIX: Use stored summary from completion_metadata OR data.summary
                       summary = (Object.keys(storedSummary).length > 0) ? storedSummary : (data.data?.summary || {});
                       if (data.data?.businessContext) {
                         storedBusinessContext = data.data.businessContext;
                       }
                       addLog('success', `Analysis completed using chunked delivery (${competitorAnalyses.length} competitors, summary with ${Object.keys(summary).length} fields)`);
+                      addLog('info', `Data source: ${chunkedData.competitors.length > 0 ? 'accumulated chunks' : 'direct hybrid delivery'}`);
                     } else if (data.data) {
                       // Use direct data (fallback for smaller datasets)
                       competitorAnalyses = data.data.competitors || [];
