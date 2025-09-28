@@ -5,15 +5,17 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ChevronRight, FileText, Users, Loader2, AlertCircle } from 'lucide-react';
+import { ChevronRight, FileText, Users, Loader2, AlertCircle, Search, Brain } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { FileUploadZone } from '@/components/analysis/FileUploadZone';
 import { CompetitorInput } from '@/components/analysis/CompetitorInput';
-import { BusinessContext } from '@/types/api';
+import { CompetitorResearchCard } from '@/components/research';
+import { BusinessContext, Competitor } from '@/types/api';
+import { CompetitorResearchResult } from '@/types/research';
 
-type SetupStep = 'upload' | 'competitors';
+type SetupStep = 'upload' | 'competitors' | 'research';
 
 interface SetupState {
   step: SetupStep;
@@ -23,6 +25,8 @@ interface SetupState {
   processingWarning?: string;
   isProcessingDocuments?: boolean;
   processingStage?: string;
+  researchResults: Record<string, CompetitorResearchResult>;
+  completedAnalyses: number;
 }
 
 export default function AnalyzePage() {
@@ -30,6 +34,8 @@ export default function AnalyzePage() {
     step: 'upload',
     files: [],
     competitors: [],
+    researchResults: {},
+    completedAnalyses: 0,
   });
 
   const updateState = (updates: Partial<SetupState>) => {
@@ -112,7 +118,26 @@ export default function AnalyzePage() {
   const nextStep = () => {
     if (state.step === 'upload') {
       updateState({ step: 'competitors' });
+    } else if (state.step === 'competitors') {
+      updateState({ step: 'research' });
     }
+  };
+
+  // Handle research completion
+  const handleResearchComplete = (result: CompetitorResearchResult) => {
+    const competitorKey = result.competitor.name;
+    updateState({
+      researchResults: {
+        ...state.researchResults,
+        [competitorKey]: result,
+      },
+      completedAnalyses: state.completedAnalyses + 1,
+    });
+  };
+
+  // Handle research start
+  const handleResearchStart = (competitor: Competitor) => {
+    console.log(`🚀 Starting research for ${competitor.name}`);
   };
 
   const resetToUpload = () => {
@@ -122,6 +147,8 @@ export default function AnalyzePage() {
       competitors: [],
       businessContext: undefined,
       processingWarning: undefined,
+      researchResults: {},
+      completedAnalyses: 0,
     });
   };
 
@@ -130,10 +157,14 @@ export default function AnalyzePage() {
       <div className="container mx-auto px-4 py-8 max-w-6xl">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-white mb-4">
-            Competitor Setup
+            {state.step === 'upload' && 'Document Upload'}
+            {state.step === 'competitors' && 'Competitor Setup'}
+            {state.step === 'research' && 'Competitor Research'}
           </h1>
           <p className="text-lg text-slate-300 max-w-2xl mx-auto">
-            Upload documents to extract competitors or manually add them to create your competitor list
+            {state.step === 'upload' && 'Upload documents to extract competitors or continue to manual entry'}
+            {state.step === 'competitors' && 'Add competitors manually or from extracted documents'}
+            {state.step === 'research' && 'Analyze each competitor individually to generate comprehensive research reports'}
           </p>
         </div>
 
@@ -241,6 +272,16 @@ export default function AnalyzePage() {
                 >
                   Back
                 </Button>
+                {state.competitors.length > 0 && (
+                  <Button
+                    onClick={nextStep}
+                    className="bg-green-600 hover:bg-green-700"
+                  >
+                    <Brain className="h-4 w-4 mr-2" />
+                    Start Research
+                    <ChevronRight className="h-4 w-4 ml-2" />
+                  </Button>
+                )}
                 <Button
                   onClick={resetToUpload}
                   variant="outline"
@@ -251,6 +292,86 @@ export default function AnalyzePage() {
               </div>
             </CardContent>
           </Card>
+        )}
+
+        {/* Research Step */}
+        {state.step === 'research' && (
+          <div className="space-y-6">
+            {/* Progress Overview */}
+            <Card className="bg-slate-800/50 border-slate-700">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center gap-2">
+                  <Search className="h-5 w-5 text-blue-400" />
+                  Research Progress
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+                  <div>
+                    <div className="text-2xl font-bold text-white">{state.competitors.length}</div>
+                    <div className="text-slate-400 text-sm">Total Competitors</div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold text-green-400">{state.completedAnalyses}</div>
+                    <div className="text-slate-400 text-sm">Completed Analyses</div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold text-yellow-400">
+                      {state.competitors.length - state.completedAnalyses}
+                    </div>
+                    <div className="text-slate-400 text-sm">Remaining</div>
+                  </div>
+                </div>
+
+                {state.completedAnalyses === state.competitors.length && state.competitors.length > 0 && (
+                  <div className="mt-4 p-3 bg-green-900/30 border border-green-700 rounded-lg">
+                    <div className="flex items-center gap-2 text-green-400">
+                      <Brain className="h-4 w-4" />
+                      <span className="font-medium">All competitor analyses completed!</span>
+                    </div>
+                    <p className="text-green-300 text-sm mt-1">
+                      You can now review all research results and export reports.
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Competitor Research Cards */}
+            <div className="space-y-4">
+              {state.competitors.map((competitor, index) => (
+                <CompetitorResearchCard
+                  key={`${competitor.name}-${index}`}
+                  competitor={competitor as Competitor}
+                  businessContext={state.businessContext}
+                  onResearchStart={handleResearchStart}
+                  onResearchComplete={handleResearchComplete}
+                />
+              ))}
+            </div>
+
+            {/* Navigation */}
+            <Card className="bg-slate-800/50 border-slate-700">
+              <CardContent className="pt-6">
+                <div className="flex gap-3">
+                  <Button
+                    onClick={() => updateState({ step: 'competitors' })}
+                    variant="outline"
+                    className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                  >
+                    Back to Competitors
+                  </Button>
+                  <Button
+                    onClick={resetToUpload}
+                    variant="outline"
+                    className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                  >
+                    Start Over
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         )}
       </div>
     </div>
