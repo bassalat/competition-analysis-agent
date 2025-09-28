@@ -137,12 +137,14 @@ export async function POST(request: NextRequest) {
     const stream = new ReadableStream({
       start(controller) {
         let isClosed = false;
+        const encoder = new TextEncoder();
 
-        // Helper to send SSE data safely
+        // Helper to send SSE data safely with proper encoding
         const sendData = (data: Record<string, unknown>) => {
           if (isClosed) return;
           try {
-            controller.enqueue(`data: ${JSON.stringify(data)}\n\n`);
+            const message = `data: ${JSON.stringify(data)}\n\n`;
+            controller.enqueue(encoder.encode(message));
           } catch (error) {
             console.warn('Failed to send data:', error);
             isClosed = true;
@@ -305,9 +307,22 @@ export async function POST(request: NextRequest) {
                 data: finalData,
                 timestamp: new Date().toISOString()
               });
-              unsubscribeCosts();
-              controller.close();
-              isClosed = true;
+
+              // Add delay and explicit end marker to ensure proper delivery in production
+              setTimeout(() => {
+                if (!isClosed) {
+                  try {
+                    // Send end-of-stream marker
+                    const endMessage = "event: end\ndata: {}\n\n";
+                    controller.enqueue(encoder.encode(endMessage));
+                  } catch (error) {
+                    console.warn('Failed to send end marker:', error);
+                  }
+                  unsubscribeCosts();
+                  controller.close();
+                  isClosed = true;
+                }
+              }, 500); // 500ms delay to ensure data is flushed
             }
 
           } catch (error) {
@@ -321,9 +336,15 @@ export async function POST(request: NextRequest) {
                 progress: -1,
                 timestamp: new Date().toISOString()
               });
-              unsubscribeCosts();
-              controller.close();
-              isClosed = true;
+
+              // Add delay before closing on error as well
+              setTimeout(() => {
+                if (!isClosed) {
+                  unsubscribeCosts();
+                  controller.close();
+                  isClosed = true;
+                }
+              }, 100);
             }
           }
         })();
@@ -332,9 +353,11 @@ export async function POST(request: NextRequest) {
 
     return new Response(stream, {
       headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no', // Disable nginx buffering
+        'X-Content-Type-Options': 'nosniff',
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type',
