@@ -282,6 +282,8 @@ When multiple values exist for the same metric:
 - Include source credibility indicators
 - Flag uncertain data with "reportedly" or "estimated"
 
+CRITICAL: The original report contains a ## References section with numbered URLs. You MUST preserve this section exactly as it appears - do not replace it with placeholder text.
+
 Strictly enforce this EXACT document structure:
 
 ## Company Overview
@@ -297,7 +299,7 @@ Strictly enforce this EXACT document structure:
 [News content with ### subsections]
 
 ## References
-[References in MLA format - PRESERVE EXACTLY AS PROVIDED]
+[Preserve the exact references from the original document - do NOT use placeholder text]
 
 Critical rules:
 1. The document MUST start with "# ${company} Research Report"
@@ -314,7 +316,7 @@ Critical rules:
 7. Never use more than one blank line between sections
 8. Format all bullet points with *
 9. Add one blank line before and after each section/list
-10. DO NOT CHANGE the format of the references section
+10. PRESERVE all reference URLs exactly as provided in the original text
 
 Return the polished report in flawless markdown format. No explanation.
 
