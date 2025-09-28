@@ -379,38 +379,37 @@ export async function POST(request: NextRequest) {
 
                     // Special case for single competitor - ensure data delivery
                     if (competitors.length === 1) {
-                      console.log('Single competitor with large data, using hybrid delivery approach');
-                      // Send as chunk for consistency but also include in complete event
+                      console.log('Single competitor with large data, using direct delivery in complete event');
+                      // Send complete event with full data immediately (no chunking needed for single competitor)
                       sendData({
-                        type: 'data_chunk',
-                        chunkIndex: 0,
-                        totalChunks: 1,
-                        data: { competitors: competitors },
+                        type: 'complete',
+                        progress: 100,
+                        chunked: false, // Mark as non-chunked since we're delivering directly
+                        data: {
+                          competitors: finalData.competitors,
+                          summary: finalData.summary
+                        },
+                        message: `Analysis completed! ${successfulAnalyses}/${competitors.length} successful. Avg cost: $${avgCostPerCompetitor.toFixed(4)}/competitor`,
                         timestamp: new Date().toISOString()
                       });
-                      sendKeepAlive();
+                      sendKeepAlive(); // Force immediate flush
 
-                      // Also send complete event with full data as backup
+                      // Send completion verification signal with aggressive flushing
                       setTimeout(() => {
                         if (!isClosed) {
-                          console.log('Sending hybrid complete event with full data');
                           sendData({
-                            type: 'complete',
+                            type: 'completion_verified',
                             progress: 100,
-                            chunked: true,
-                            data: {
-                              competitors: finalData.competitors,
-                              summary: finalData.summary
-                            }, // Fix data structure to match frontend expectations
-                            message: `Analysis completed! ${successfulAnalyses}/${competitors.length} successful. Avg cost: $${avgCostPerCompetitor.toFixed(4)}/competitor`,
+                            message: 'Analysis completed successfully',
                             timestamp: new Date().toISOString()
                           });
-                          sendKeepAlive(); // Force flush
-                          // Send additional flush signals
+                          sendKeepAlive();
+                          // Multiple flush attempts for Railway proxy
                           setTimeout(() => sendKeepAlive(), 100);
                           setTimeout(() => sendKeepAlive(), 300);
+                          setTimeout(() => sendKeepAlive(), 500);
                         }
-                      }, 800); // Extra delay to ensure chunk is processed first
+                      }, 200);
                       return; // Exit early to avoid normal chunked logic
                     }
 

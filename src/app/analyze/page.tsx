@@ -512,14 +512,20 @@ export default function AnalyzePage() {
                     completionReceived = true;
                     clearTimeout(streamTimeout);
 
-                    // Handle both chunked and non-chunked completion
+                    // Handle both chunked and non-chunked completion - prioritize direct data for non-chunked
                     let competitorAnalyses: AnalysisData[] = [];
                     let summary: Record<string, unknown> = {};
 
                     // Try multiple data access patterns to handle different backend structures
                     const dataSource = data.data || data; // Handle both nested and direct data
 
-                    if (data.chunked && (chunkedData.competitors.length > 0 || dataSource?.competitors)) {
+                    if (!data.chunked && dataSource && (dataSource.competitors || dataSource.summary)) {
+                      // Non-chunked direct delivery - use data from complete event immediately
+                      competitorAnalyses = dataSource.competitors || [];
+                      summary = dataSource.summary || {};
+                      storedBusinessContext = dataSource.businessContext;
+                      addLog('success', `Analysis completed using direct delivery (${competitorAnalyses.length} competitors, ${Object.keys(summary).length} summary fields)`);
+                    } else if (data.chunked && (chunkedData.competitors.length > 0 || dataSource?.competitors)) {
                       // Use accumulated chunked data + stored summary, with fallback to direct data
                       competitorAnalyses = chunkedData.competitors.length > 0 ? chunkedData.competitors : (dataSource?.competitors || []);
                       // CRITICAL FIX: Use stored summary from completion_metadata OR data.summary
@@ -529,12 +535,6 @@ export default function AnalyzePage() {
                       }
                       addLog('success', `Analysis completed using chunked delivery (${competitorAnalyses.length} competitors, summary with ${Object.keys(summary).length} fields)`);
                       addLog('info', `Data source: ${chunkedData.competitors.length > 0 ? 'accumulated chunks' : 'direct hybrid delivery'}`);
-                    } else if (dataSource && (dataSource.competitors || dataSource.summary)) {
-                      // Use direct data (fallback for smaller datasets)
-                      competitorAnalyses = dataSource.competitors || [];
-                      summary = dataSource.summary || {};
-                      storedBusinessContext = dataSource.businessContext;
-                      addLog('success', `Analysis completed using direct delivery (${competitorAnalyses.length} competitors)`);
                     } else {
                       // Final fallback - use whatever data we have stored
                       if (chunkedData.competitors.length > 0) {
