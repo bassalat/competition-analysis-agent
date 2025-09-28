@@ -153,15 +153,29 @@ export default function AnalyzePage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+      {/* Header matching home page */}
+      <header className="border-b bg-white/80 backdrop-blur-sm">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Brain className="h-8 w-8 text-blue-600" />
+              <h1 className="text-xl font-bold text-gray-900">
+                AI Competitor Intelligence
+              </h1>
+            </div>
+          </div>
+        </div>
+      </header>
+
       <div className="container mx-auto px-4 py-8 max-w-6xl">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-white mb-4">
+          <h1 className="text-4xl font-bold text-gray-900 mb-4">
             {state.step === 'upload' && 'Document Upload'}
             {state.step === 'competitors' && 'Competitor Setup'}
             {state.step === 'research' && 'Competitor Research'}
           </h1>
-          <p className="text-lg text-slate-300 max-w-2xl mx-auto">
+          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
             {state.step === 'upload' && 'Upload documents to extract competitors or continue to manual entry'}
             {state.step === 'competitors' && 'Add competitors manually or from extracted documents'}
             {state.step === 'research' && 'Analyze each competitor individually to generate comprehensive research reports'}
@@ -170,10 +184,10 @@ export default function AnalyzePage() {
 
         {/* Upload Step */}
         {state.step === 'upload' && (
-          <Card className="mb-6 bg-slate-800/50 border-slate-700">
+          <Card className="mb-6 bg-white/80 backdrop-blur-sm border-blue-200 shadow-lg">
             <CardHeader>
-              <CardTitle className="text-white flex items-center gap-2">
-                <FileText className="h-5 w-5 text-blue-400" />
+              <CardTitle className="text-gray-900 flex items-center gap-2">
+                <FileText className="h-5 w-5 text-blue-600" />
                 Upload Business Documents (Optional)
               </CardTitle>
             </CardHeader>
@@ -184,18 +198,18 @@ export default function AnalyzePage() {
                 />
 
                 {state.isProcessingDocuments && state.processingStage && (
-                  <div className="bg-slate-700/50 p-4 rounded-lg">
+                  <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
                     <div className="flex items-center gap-3">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-400"></div>
-                      <span className="text-slate-300 text-sm">{state.processingStage}</span>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                      <span className="text-blue-800 text-sm">{state.processingStage}</span>
                     </div>
                   </div>
                 )}
 
                 {state.processingWarning && (
-                  <Alert className="border-yellow-500 bg-yellow-500/10">
-                    <AlertCircle className="h-4 w-4 text-yellow-500" />
-                    <AlertDescription className="text-yellow-200">
+                  <Alert className="border-yellow-500 bg-yellow-50">
+                    <AlertCircle className="h-4 w-4 text-yellow-600" />
+                    <AlertDescription className="text-yellow-800">
                       {state.processingWarning}
                     </AlertDescription>
                   </Alert>
@@ -220,7 +234,7 @@ export default function AnalyzePage() {
                   )}
                   <Button
                     onClick={nextStep}
-                    className="bg-purple-600 hover:bg-purple-700"
+                    className="bg-blue-600 hover:bg-blue-700"
                   >
                     Continue <ChevronRight className="h-4 w-4 ml-2" />
                   </Button>
@@ -232,10 +246,10 @@ export default function AnalyzePage() {
 
         {/* Competitors Step */}
         {state.step === 'competitors' && (
-          <Card className="mb-6 bg-slate-800/50 border-slate-700">
+          <Card className="mb-6 bg-white/80 backdrop-blur-sm border-blue-200 shadow-lg">
             <CardHeader>
-              <CardTitle className="text-white flex items-center gap-2">
-                <Users className="h-5 w-5 text-green-400" />
+              <CardTitle className="text-gray-900 flex items-center gap-2">
+                <Users className="h-5 w-5 text-blue-600" />
                 Your Competitors
               </CardTitle>
             </CardHeader>
@@ -247,16 +261,16 @@ export default function AnalyzePage() {
               />
 
               {state.competitors.length > 0 && (
-                <div className="mt-6 bg-slate-700/30 p-4 rounded-lg">
-                  <h3 className="text-sm font-medium text-slate-300 mb-3">
+                <div className="mt-6 bg-blue-50 border border-blue-200 p-4 rounded-lg">
+                  <h3 className="text-sm font-medium text-gray-700 mb-3">
                     Competitor List ({state.competitors.length})
                   </h3>
                   <div className="space-y-2">
                     {state.competitors.map((competitor, index) => (
-                      <div key={index} className="flex items-center justify-between text-sm text-slate-300 bg-slate-700/50 p-2 rounded">
-                        <span>{competitor.name}</span>
+                      <div key={index} className="flex items-center justify-between text-sm text-gray-700 bg-white/80 p-3 rounded border">
+                        <span className="font-medium">{competitor.name}</span>
                         {competitor.website && (
-                          <span className="text-xs text-slate-400">{competitor.website}</span>
+                          <span className="text-xs text-blue-600">{competitor.website}</span>
                         )}
                       </div>
                     ))}
@@ -268,14 +282,14 @@ export default function AnalyzePage() {
                 <Button
                   onClick={() => updateState({ step: 'upload' })}
                   variant="outline"
-                  className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                  className="border-blue-300 text-blue-700 hover:bg-blue-50"
                 >
                   Back
                 </Button>
                 {state.competitors.length > 0 && (
                   <Button
                     onClick={nextStep}
-                    className="bg-green-600 hover:bg-green-700"
+                    className="bg-blue-600 hover:bg-blue-700"
                   >
                     <Brain className="h-4 w-4 mr-2" />
                     Start Research
@@ -285,7 +299,7 @@ export default function AnalyzePage() {
                 <Button
                   onClick={resetToUpload}
                   variant="outline"
-                  className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                  className="border-blue-300 text-blue-700 hover:bg-blue-50"
                 >
                   Start Over
                 </Button>
@@ -298,38 +312,38 @@ export default function AnalyzePage() {
         {state.step === 'research' && (
           <div className="space-y-6">
             {/* Progress Overview */}
-            <Card className="bg-slate-800/50 border-slate-700">
+            <Card className="bg-white/80 backdrop-blur-sm border-blue-200 shadow-lg">
               <CardHeader>
-                <CardTitle className="text-white flex items-center gap-2">
-                  <Search className="h-5 w-5 text-blue-400" />
+                <CardTitle className="text-gray-900 flex items-center gap-2">
+                  <Search className="h-5 w-5 text-blue-600" />
                   Research Progress
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
                   <div>
-                    <div className="text-2xl font-bold text-white">{state.competitors.length}</div>
-                    <div className="text-slate-400 text-sm">Total Competitors</div>
+                    <div className="text-2xl font-bold text-gray-900">{state.competitors.length}</div>
+                    <div className="text-gray-600 text-sm">Total Competitors</div>
                   </div>
                   <div>
-                    <div className="text-2xl font-bold text-green-400">{state.completedAnalyses}</div>
-                    <div className="text-slate-400 text-sm">Completed Analyses</div>
+                    <div className="text-2xl font-bold text-blue-600">{state.completedAnalyses}</div>
+                    <div className="text-gray-600 text-sm">Completed Analyses</div>
                   </div>
                   <div>
-                    <div className="text-2xl font-bold text-yellow-400">
+                    <div className="text-2xl font-bold text-indigo-600">
                       {state.competitors.length - state.completedAnalyses}
                     </div>
-                    <div className="text-slate-400 text-sm">Remaining</div>
+                    <div className="text-gray-600 text-sm">Remaining</div>
                   </div>
                 </div>
 
                 {state.completedAnalyses === state.competitors.length && state.competitors.length > 0 && (
-                  <div className="mt-4 p-3 bg-green-900/30 border border-green-700 rounded-lg">
-                    <div className="flex items-center gap-2 text-green-400">
+                  <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="flex items-center gap-2 text-blue-700">
                       <Brain className="h-4 w-4" />
                       <span className="font-medium">All competitor analyses completed!</span>
                     </div>
-                    <p className="text-green-300 text-sm mt-1">
+                    <p className="text-blue-600 text-sm mt-1">
                       You can now review all research results and export reports.
                     </p>
                   </div>
@@ -351,20 +365,20 @@ export default function AnalyzePage() {
             </div>
 
             {/* Navigation */}
-            <Card className="bg-slate-800/50 border-slate-700">
+            <Card className="bg-white/80 backdrop-blur-sm border-blue-200 shadow-lg">
               <CardContent className="pt-6">
                 <div className="flex gap-3">
                   <Button
                     onClick={() => updateState({ step: 'competitors' })}
                     variant="outline"
-                    className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                    className="border-blue-300 text-blue-700 hover:bg-blue-50"
                   >
                     Back to Competitors
                   </Button>
                   <Button
                     onClick={resetToUpload}
                     variant="outline"
-                    className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                    className="border-blue-300 text-blue-700 hover:bg-blue-50"
                   >
                     Start Over
                   </Button>
