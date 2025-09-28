@@ -109,10 +109,16 @@ export function CompetitorResearchCard({
             try {
               const data = JSON.parse(line.slice(6));
 
-              if (data.type === 'update') {
+              // Handle all research update types
+              if (data.type === 'status' || data.type === 'progress' || data.type === 'result' || data.type === 'error') {
                 handleProgressUpdate(data as ResearchUpdate);
+
+                // If it's a result, we've received the final data
+                if (data.type === 'result') {
+                  console.log('✅ Research result received:', data);
+                }
               } else if (data.type === 'complete') {
-                console.log('✅ Research completed:', data);
+                console.log('✅ Research stream completed');
                 break;
               }
             } catch (parseError) {
