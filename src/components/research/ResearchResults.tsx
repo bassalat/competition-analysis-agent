@@ -54,12 +54,16 @@ export function ResearchResults({
     const printWindow = window.open('', '_blank');
     if (printWindow) {
       const formattedReport = result.report
+        .replace(/\n\n/g, '</p><p>')
         .replace(/\n/g, '<br>')
         .replace(/^# (.+)/gm, '<h1>$1</h1>')
         .replace(/^## (.+)/gm, '<h2>$1</h2>')
         .replace(/^### (.+)/gm, '<h3>$1</h3>')
+        .replace(/^\[(\d+)\]\s*(.+?)\s*-\s*(https?:\/\/[^\s<]+)/gm, '<p><strong>[$1]</strong> $2<br><small><a href="$3">$3</a></small></p>')
         .replace(/^\* (.+)/gm, '<li>$1</li>')
-        .replace(/(<li>.*<\/li>)/g, '<ul>$1</ul>');
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/(<li>.*<\/li>)/g, '<ul>$1</ul>')
+        .replace(/^(?!<[h1-6]|<li|<ul|<p)/gm, '<p>');
 
       printWindow.document.write(`
         <html>
@@ -107,16 +111,37 @@ export function ResearchResults({
     }
   };
 
-  // Format content for display
+  // Format content for display with enhanced markdown support
   const formatContent = (content: string) => {
     return content
+      // Handle line breaks first
+      .replace(/\n\n/g, '</p><p class="mb-4">')
       .replace(/\n/g, '<br>')
-      .replace(/^# (.+)/gm, '<h1 class="text-2xl font-bold text-gray-900 mb-4 border-b-2 border-blue-500 pb-2">$1</h1>')
-      .replace(/^## (.+)/gm, '<h2 class="text-xl font-semibold text-gray-800 mt-6 mb-3 border-b border-gray-200 pb-1">$1</h2>')
-      .replace(/^### (.+)/gm, '<h3 class="text-lg font-medium text-gray-700 mt-4 mb-2">$1</h3>')
-      .replace(/^\* (.+)/gm, '<li class="ml-4 text-gray-600">$1</li>')
+
+      // Headers with proper spacing
+      .replace(/^# (.+)/gm, '<h1 class="text-2xl font-bold text-gray-900 mb-6 mt-8 border-b-2 border-blue-500 pb-3">$1</h1>')
+      .replace(/^## (.+)/gm, '<h2 class="text-xl font-semibold text-gray-800 mt-8 mb-4 border-b border-gray-200 pb-2">$1</h2>')
+      .replace(/^### (.+)/gm, '<h3 class="text-lg font-medium text-gray-700 mt-6 mb-3">$1</h3>')
+
+      // References section - numbered list format [1] Title - URL
+      .replace(/^\[(\d+)\]\s*(.+?)\s*-\s*(https?:\/\/[^\s<]+)/gm,
+        '<div class="mb-2 flex items-start gap-3"><span class="inline-flex items-center justify-center w-6 h-6 text-xs font-medium text-white bg-blue-600 rounded-full flex-shrink-0 mt-0.5">$1</span><div><div class="font-medium text-gray-900 mb-1">$2</div><a href="$3" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 underline text-sm break-all">$3</a></div></div>')
+
+      // Bullet points with proper styling
+      .replace(/^\* (.+)/gm, '<li class="ml-6 mb-2 text-gray-700 list-disc">$1</li>')
+
+      // Bold text
       .replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold text-gray-900">$1</strong>')
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 underline">$1 <svg class="inline h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg></a>');
+
+      // Regular markdown links
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 underline">$1 <svg class="inline h-3 w-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg></a>')
+
+      // Wrap in paragraphs
+      .replace(/^(?!<[h1-6]|<li|<div|<ul|<ol)/gm, '<p class="mb-4">')
+
+      // Clean up empty paragraphs
+      .replace(/<p class="mb-4"><\/p>/g, '')
+      .replace(/<p class="mb-4"><br><\/p>/g, '');
   };
 
   return (
@@ -252,7 +277,7 @@ export function ResearchResults({
                     </Button>
                   </div>
                   <div
-                    className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-700"
+                    className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-ul:space-y-1 prose-li:marker:text-blue-600"
                     dangerouslySetInnerHTML={{
                       __html: formatContent(result.briefings.company)
                     }}
@@ -277,7 +302,7 @@ export function ResearchResults({
                     </Button>
                   </div>
                   <div
-                    className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-700"
+                    className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-ul:space-y-1 prose-li:marker:text-blue-600"
                     dangerouslySetInnerHTML={{
                       __html: formatContent(result.briefings.industry)
                     }}
@@ -302,7 +327,7 @@ export function ResearchResults({
                     </Button>
                   </div>
                   <div
-                    className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-700"
+                    className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-ul:space-y-1 prose-li:marker:text-blue-600"
                     dangerouslySetInnerHTML={{
                       __html: formatContent(result.briefings.financial)
                     }}
@@ -327,7 +352,7 @@ export function ResearchResults({
                     </Button>
                   </div>
                   <div
-                    className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-ul:list-disc"
+                    className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-ul:space-y-1 prose-li:marker:text-blue-600"
                     dangerouslySetInnerHTML={{
                       __html: formatContent(result.briefings.news)
                     }}
@@ -352,7 +377,7 @@ export function ResearchResults({
                     </Button>
                   </div>
                   <div
-                    className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-ul:list-disc"
+                    className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-ul:space-y-1 prose-li:marker:text-blue-600"
                     dangerouslySetInnerHTML={{
                       __html: formatContent(result.report)
                     }}
