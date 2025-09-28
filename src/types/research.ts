@@ -118,6 +118,8 @@ export interface ResearchUpdate {
     documentsFound?: number;
     documentsScraped?: number;
     briefingLength?: number;
+    briefingsGenerated?: string[]; // Array of briefing categories generated
+    totalBriefings?: number; // Total number of briefings generated
     chunk?: string; // For streaming final report
     totalSteps?: number;
     currentStepIndex?: number;
