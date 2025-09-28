@@ -61,11 +61,13 @@ export class NewsScanner extends BaseResearcher {
         onUpdate
       );
 
-      // Use news search for more recent content
+      // Use news search for more recent content with date filtering
       for (const query of queries) {
         try {
-          console.log(`📰 News searching: "${query}"`);
-          const newsResponse = await this.serper.searchNews(query, { num: 6 });
+          const currentYear = new Date().getFullYear();
+          const enhancedQuery = `${query} ${currentYear} OR ${currentYear - 1}`;
+          console.log(`📰 News searching: "${enhancedQuery}"`);
+          const newsResponse = await this.serper.searchNews(enhancedQuery, { num: 8 });
 
           if (newsResponse.success && newsResponse.data) {
             for (const result of newsResponse.data) {
@@ -97,16 +99,16 @@ export class NewsScanner extends BaseResearcher {
         }
       }
 
-      // Scrape top news URLs for full content (limit to 2 for news)
+      // Scrape top news URLs for full content (limit to 4 for news)
       if (Object.keys(news_data).length > 0) {
         await this.sendUpdate(
           state,
           'Scraping news articles',
-          { documentsToScrape: Math.min(2, Object.keys(news_data).length) },
+          { documentsToScrape: Math.min(4, Object.keys(news_data).length) },
           onUpdate
         );
 
-        news_data = await this.scrapeDocuments(news_data, 2, state, onUpdate);
+        news_data = await this.scrapeDocuments(news_data, 4, state, onUpdate);
       }
 
       msg.push(`\n✓ Found ${Object.keys(news_data).length} documents`);

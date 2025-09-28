@@ -4,13 +4,17 @@
  */
 
 import { BaseResearcher, UpdateCallback } from './base-researcher';
-import { ResearchState, DocumentData, RESEARCH_PROMPTS } from '@/types/research';
+import { ResearchState, DocumentData, RESEARCH_PROMPTS, TARGETED_PROMPTS } from '@/types/research';
 
 export class FinancialAnalyst extends BaseResearcher {
   async analyze(
     state: ResearchState,
     onUpdate?: UpdateCallback
   ): Promise<{ message: string; financial_data: Record<string, DocumentData>; analyst_type: string; queries: string[] }> {
+
+    // Add date context for temporal awareness
+    const currentYear = new Date().getFullYear();
+    const lastYear = currentYear - 1;
 
     // Update current step
     state.currentStep = 'financial_analyst';
@@ -24,7 +28,14 @@ export class FinancialAnalyst extends BaseResearcher {
         onUpdate
       );
 
-      const queries = await this.generateQueries(state, RESEARCH_PROMPTS.FINANCIAL);
+      // Use both original and targeted prompts for enhanced financial data
+      const baseQueries = await this.generateQueries(state, RESEARCH_PROMPTS.FINANCIAL);
+      const targetedPrompt = TARGETED_PROMPTS.FINANCIAL_SOURCES
+        .replace(/{year}/g, `${currentYear} OR ${lastYear}`);
+      const targetedQueries = await this.generateQueries(state, targetedPrompt);
+
+      // Combine queries with base queries first, then top 2 targeted
+      const queries = [...baseQueries, ...targetedQueries.slice(0, 2)];
 
       await this.sendUpdate(
         state,
@@ -79,11 +90,11 @@ export class FinancialAnalyst extends BaseResearcher {
         await this.sendUpdate(
           state,
           'Scraping financial web pages',
-          { documentsToScrape: Math.min(2, Object.keys(financial_data).length) },
+          { documentsToScrape: Math.min(4, Object.keys(financial_data).length) },
           onUpdate
         );
 
-        financial_data = await this.scrapeDocuments(financial_data, 2, state, onUpdate);
+        financial_data = await this.scrapeDocuments(financial_data, 4, state, onUpdate);
       }
 
       // Final status update

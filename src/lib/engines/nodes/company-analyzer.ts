@@ -4,7 +4,7 @@
  */
 
 import { BaseResearcher, UpdateCallback } from './base-researcher';
-import { ResearchState, DocumentData, RESEARCH_PROMPTS } from '@/types/research';
+import { ResearchState, DocumentData, RESEARCH_PROMPTS, TARGETED_PROMPTS } from '@/types/research';
 
 export class CompanyAnalyzer extends BaseResearcher {
   async analyze(
@@ -12,6 +12,7 @@ export class CompanyAnalyzer extends BaseResearcher {
     onUpdate?: UpdateCallback
   ): Promise<{ message: string; company_data: Record<string, DocumentData> }> {
     const company = state.company;
+    const currentYear = new Date().getFullYear();
     const msg = [`🏢 Company Analyzer analyzing ${company}`];
 
     // Update current step
@@ -25,7 +26,16 @@ export class CompanyAnalyzer extends BaseResearcher {
       onUpdate
     );
 
-    const queries = await this.generateQueries(state, RESEARCH_PROMPTS.COMPANY);
+    // Use both original and targeted prompts for comprehensive coverage
+    const baseQueries = await this.generateQueries(state, RESEARCH_PROMPTS.COMPANY);
+    const companyDomain = company.toLowerCase().replace(/\s+/g, '') + '.com';
+    const targetedPrompt = TARGETED_PROMPTS.COMPANY_SOURCES
+      .replace(/{year}/g, currentYear.toString())
+      .replace(/{company_domain}/g, companyDomain);
+    const targetedQueries = await this.generateQueries(state, targetedPrompt);
+
+    // Combine queries with base queries first, then top 3 targeted
+    const queries = [...baseQueries, ...targetedQueries.slice(0, 3)];
 
     // Send subqueries update (matching repo format)
     const subqueriesMsg = "🔍 Subqueries for company analysis:\n" +
@@ -73,11 +83,11 @@ export class CompanyAnalyzer extends BaseResearcher {
         await this.sendUpdate(
           state,
           'Scraping company web pages',
-          { documentsToScrape: Math.min(3, Object.keys(searchResults).length) },
+          { documentsToScrape: Math.min(5, Object.keys(searchResults).length) },
           onUpdate
         );
 
-        company_data = await this.scrapeDocuments(company_data, 3, state, onUpdate);
+        company_data = await this.scrapeDocuments(company_data, 5, state, onUpdate);
       }
 
       msg.push(`\n✓ Found ${Object.keys(company_data).length} documents`);

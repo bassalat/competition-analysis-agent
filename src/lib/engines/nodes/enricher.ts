@@ -97,13 +97,27 @@ export class Enricher extends BaseResearcher {
     categoryName: string,
     categoryData: Record<string, DocumentData>
   ): Promise<void> {
+    const currentDate = new Date();
     const documents = Object.values(categoryData);
     if (documents.length === 0) return;
 
-    // Create enrichment summary for this category
-    const documentSummaries = documents
+    // Separate recent vs older data for better prioritization
+    const recentDocs = documents.filter(doc => {
+      if (doc.date) {
+        const docDate = new Date(doc.date);
+        const monthsOld = (currentDate.getTime() - docDate.getTime()) / (1000 * 60 * 60 * 24 * 30);
+        return monthsOld <= 12; // Consider data recent if within 12 months
+      }
+      return false; // If no date, treat as unknown age
+    });
+
+    // Prioritize recent documents in summaries, fallback to all if no recent ones
+    const docsToAnalyze = recentDocs.length > 0 ? recentDocs : documents;
+
+    // Create enrichment summary with source attribution
+    const documentSummaries = docsToAnalyze
       .slice(0, 5) // Limit to top 5 documents to avoid token limits
-      .map(doc => `Title: ${doc.title}\nContent: ${doc.content.substring(0, 300)}...`)
+      .map(doc => `Source: ${doc.title} (${doc.url})\nDate: ${doc.date || 'Unknown'}\nContent: ${doc.content.substring(0, 300)}...`)
       .join('\n\n');
 
     const enrichmentPrompt = this.getEnrichmentPrompt(categoryName, state.company, state.industry, documentSummaries);
@@ -157,52 +171,76 @@ export class Enricher extends BaseResearcher {
 Research Data:
 ${documentSummaries}
 
-Provide enrichment analysis focusing on:
-- Key business model insights
-- Competitive positioning
-- Strategic strengths and weaknesses
-- Market differentiation factors
+Validate and extract:
+- Specific numbers (not ranges) with sources
+- Exact dates for all events and metrics
+- Most recent data available (prefer ${new Date().getFullYear()} data)
+- Flag any conflicting information between sources
 
-Keep the analysis concise and factual.`,
+Provide enrichment analysis focusing on:
+- Key business model insights with metrics
+- Competitive positioning with market data
+- Strategic strengths and weaknesses with evidence
+- Market differentiation factors with specifics
+
+Keep the analysis concise and factual with source attributions.`,
 
       industry: `${baseContext}
 
 Research Data:
 ${documentSummaries}
 
-Provide enrichment analysis focusing on:
-- Market trends and dynamics
-- Competitive landscape overview
-- Industry growth factors
-- Key challenges and opportunities
+Validate and extract:
+- Market size figures and growth percentages with sources
+- Competitor rankings and market share data
+- Specific trend data with timeframes
+- Industry analysis with recent dates
 
-Keep the analysis concise and factual.`,
+Provide enrichment analysis focusing on:
+- Market trends and dynamics with metrics
+- Competitive landscape with specific positioning
+- Industry growth factors with data points
+- Key challenges and opportunities with evidence
+
+Keep the analysis concise and factual with source attributions.`,
 
       financial: `${baseContext}
 
 Research Data:
 ${documentSummaries}
 
-Provide enrichment analysis focusing on:
-- Financial health indicators
-- Revenue model analysis
-- Funding and investment patterns
-- Financial risks and opportunities
+Validate and extract:
+- Exact financial figures (not ranges) with reporting periods
+- Funding amounts and dates with investor names
+- Revenue data with fiscal year specifications
+- Valuation figures with date stamps
 
-Keep the analysis concise and factual.`,
+Provide enrichment analysis focusing on:
+- Financial health indicators with metrics
+- Revenue model analysis with numbers
+- Funding and investment patterns with specifics
+- Financial risks and opportunities with data
+
+Keep the analysis concise and factual with source attributions.`,
 
       news: `${baseContext}
 
 Research Data:
 ${documentSummaries}
 
-Provide enrichment analysis focusing on:
-- Recent strategic developments
-- Market momentum indicators
-- Partnership and expansion activities
-- Key announcements and their implications
+Validate and extract:
+- Specific dates for all announcements and developments
+- Partnership details with company names and terms
+- Product launch information with dates and features
+- Strategic initiatives with timelines
 
-Keep the analysis concise and factual.`
+Provide enrichment analysis focusing on:
+- Recent strategic developments with dates
+- Market momentum indicators with metrics
+- Partnership and expansion activities with specifics
+- Key announcements and their implications with timing
+
+Keep the analysis concise and factual with source attributions.`
     };
 
     return categoryPrompts[category as keyof typeof categoryPrompts] || categoryPrompts.company;

@@ -179,16 +179,32 @@ export class Editor extends BaseResearcher {
     const company = state.company;
     const industry = state.industry;
     const hq_location = state.hq_location;
+    const currentDate = new Date().toISOString().split('T')[0];
 
-    const prompt = `You are compiling a comprehensive research report about ${company}.
+    const prompt = `You are compiling a research report about ${company} as of ${currentDate}.
 
 Compiled briefings:
 ${combinedContent}
 
+STRICT DATA REQUIREMENTS:
+1. Always include dates/timeframes for metrics (e.g., "500 employees (2024)")
+2. Use specific numbers instead of ranges when available
+3. Attribute key data points to sources (e.g., "per Crunchbase")
+4. Mark estimates clearly (e.g., "estimated $25M revenue")
+5. For financial data, include reporting period (Q3 2024, FY 2024)
+6. Replace vague terms like "recently" with specific dates/quarters
+
+Examples of proper formatting:
+✅ "Founded in 2007 by Uzair Gadit in Hong Kong"
+✅ "Revenue of $25M (FY 2024, per industry reports)"
+✅ "Raised $10M Series A (March 2024, Crunchbase)"
+❌ "Revenue between $10M-$30M" (use specific value if available)
+❌ "Recently raised funding" (include specific date)
+
 Create a comprehensive and focused report on ${company}, a ${industry} company headquartered in ${hq_location} that:
-1. Integrates information from all sections into a cohesive non-repetitive narrative
-2. Maintains important details from each section
-3. Logically organizes information and removes transitional commentary / explanations
+1. Integrates information from all sections with temporal specificity
+2. Maintains important details with dates and sources
+3. Logically organizes information with data quality standards
 4. Uses clear section headers and structure
 
 Formatting rules:
@@ -244,18 +260,27 @@ Return the report in clean markdown format. No explanations or commentary.`;
     onUpdate?: UpdateCallback
   ): Promise<string> {
     const company = state.company;
-    const industry = state.industry;
-    const hq_location = state.hq_location;
+    const currentDate = new Date().toISOString().split('T')[0];
 
-    const prompt = `You are an expert briefing editor. You are given a report on ${company}.
+    const prompt = `You are an expert briefing editor. You are given a report on ${company} as of ${currentDate}.
 
 Current report:
 ${content}
 
-1. Remove redundant or repetitive information
-2. Remove information that is not relevant to ${company}, the ${industry} company headquartered in ${hq_location}.
-3. Remove sections lacking substantial content
-4. Remove any meta-commentary (e.g. "Here is the news...")
+DATA QUALITY ENFORCEMENT:
+1. Ensure all metrics include dates/timeframes
+2. Convert ranges to specific values when possible
+3. Remove redundant or repetitive information
+4. Remove information not relevant to ${company}
+5. Remove sections lacking substantial content
+6. Remove any meta-commentary
+7. Ensure temporal consistency across sections
+
+When multiple values exist for the same metric:
+- Prefer specific numbers over ranges
+- Use most recent data with dates
+- Include source credibility indicators
+- Flag uncertain data with "reportedly" or "estimated"
 
 Strictly enforce this EXACT document structure:
 

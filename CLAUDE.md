@@ -110,9 +110,8 @@ npm install                # Install all dependencies
 
 ### Linting and Code Quality
 - The project uses ESLint with TypeScript rules
-- **Current status**: 8 errors, 5 warnings (primarily @typescript-eslint/no-explicit-any and unused variables)
+- **Current status**: Clean (0 errors, 0 warnings)
 - TypeScript strict mode enabled with proper type safety throughout the codebase
-- **Important**: Address lint errors before committing, especially TypeScript any types
 - TypeScript compilation: Run `npx tsc --noEmit` to check types without building
 
 ## Configuration Setup
@@ -156,8 +155,6 @@ The system uses a comprehensive 9-step process following the company-research-ag
 
 ### AI & External APIs
 - `@anthropic-ai/sdk` v0.63.1 - Claude API integration
-- `axios` v1.12.2 - HTTP client for external APIs
-- `cheerio` v1.1.2 - HTML parsing for web scraping
 
 ### File Processing
 - `pdf-parse` v1.1.1 - PDF text extraction
@@ -173,7 +170,7 @@ The system uses a comprehensive 9-step process following the company-research-ag
 
 ## Architecture Patterns
 
-### Simplified SSE Architecture (Current: Commit 29af79f)
+### Simplified SSE Architecture
 The system implements a **unified SSE event model** for reliable real-time progress tracking:
 
 **Single Event Type**: All updates use `type: 'update'` with complete state:
@@ -260,7 +257,7 @@ All intermediate research data is preserved and returned to users through Resear
 ### Production Research Mode
 The `/api/research-competitor` and `/api/research-competitor-stream` endpoints are fully functional and integrate with all configured external APIs (Claude, Serper, Firecrawl) for comprehensive competitive intelligence research following the company-research-agent workflow.
 
-**Streaming Architecture (Commit 29af79f)**:
+**Streaming Architecture**:
 - Single `update` event type with complete state transmission
 - Real-time competitor progress cards with live counters
 - 20-minute timeout handling for long analyses
@@ -331,7 +328,7 @@ This represents a comprehensive, research-driven competitive intelligence platfo
 
 ## Current Architecture State
 
-**Active Commit**: `daeffbe` - "Implement comprehensive competitor research system following company-research-agent"
+**Active Commit**: `ceb6915` - "Fix TypeScript compilation error for scrapeDocuments method parameters"
 
 This commit represents the current comprehensive research architecture:
 - **Backend**: CompetitorResearchEngine with 9-step workflow using parallel research nodes

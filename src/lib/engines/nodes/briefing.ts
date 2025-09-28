@@ -180,7 +180,21 @@ export class Briefing extends BaseResearcher {
     combinedContent: string,
     enrichmentData: string
   ): string {
-    const baseInstruction = `Generate a comprehensive ${category} briefing for ${company} in the ${industry} industry.`;
+    const currentDate = new Date().toISOString().split('T')[0];
+    const currentYear = new Date().getFullYear();
+
+    const temporalInstructions = `
+TEMPORAL REQUIREMENTS (Today is ${currentDate}):
+- Include specific dates/years for all data points
+- Prioritize information from ${currentYear} and ${currentYear - 1}
+- Mark older data with "as of [date]" notation
+- Use exact dates instead of "recently" or "latest"
+- For financial data, always include the reporting period (Q1 2024, FY 2024, etc.)
+- Extract and include specific metrics (not ranges) when available
+- Flag any conflicting data with source attributions`;
+
+    const baseInstruction = `Generate a comprehensive ${category} briefing for ${company} in the ${industry} industry.
+${temporalInstructions}`;
 
     const categoryPrompts = {
       company: `${baseInstruction}
@@ -265,17 +279,38 @@ ${combinedContent}
 
 ${enrichmentData ? `Enrichment Analysis:\n${enrichmentData}\n` : ''}
 
-Create a news briefing covering recent developments:
-${combinedContent}
+Create a comprehensive news briefing with recent developments for ${company}.
 
-Format as a bullet-point list of recent developments, organized by theme:
-* Recent product launches and updates
-* Partnership and business development news
-* Strategic announcements and initiatives
-* Market expansion and growth activities
-* Leadership changes and organizational updates
+IMPORTANT: Format each item with specific dates and detailed information, following this exact pattern:
 
-Use bullet points (*) only, no subsection headers. Be factual and chronological.`
+[Date]: [Detailed description of the development/announcement]
+
+Examples of the desired format:
+June 27, 2025: Launched a fully customizable White-Label Password Manager as part of its expanding B2B Privacy Suite.
+May 16, 2025: Published its Q1 2025 Transparency Report.
+January 20, 2025: Reaffirmed commitment to protecting digital freedom worldwide.
+
+Include all types of developments:
+- Product launches and feature announcements
+- Business partnerships and collaborations
+- Awards and industry recognition
+- Company milestones and achievements
+- Funding and investment news
+- Strategic initiatives and policy updates
+- Market expansion activities
+- Leadership changes
+- Quarterly reports and transparency updates
+
+Requirements:
+1. Start each line with a specific date (Month DD, YYYY format)
+2. Include concrete details about what was announced/achieved
+3. Focus on recent developments (2024-2025 preferred)
+4. Order chronologically with most recent first
+5. Extract exact dates from the research data when available
+6. If exact dates aren't available but timeframe is mentioned (e.g., "Q1 2025", "2024"), use approximate dates
+7. Prioritize significant business developments over minor updates
+
+Do NOT use generic bullet points without dates. Each item must have a date and specific details.`
     };
 
     return categoryPrompts[category as keyof typeof categoryPrompts] || categoryPrompts.company;

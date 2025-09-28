@@ -211,12 +211,40 @@ export const RESEARCH_PROMPTS = {
 - Financial statements and key metrics
 - Revenue and profit sources`,
 
-  NEWS: `Generate queries on the recent news coverage of {company} such as:
-- Recent company announcements
-- Press releases
-- New partnerships`,
+  NEWS: `Generate detailed queries to find comprehensive recent news and developments for {company} including:
+- Product launches and feature announcements with dates
+- Business partnerships and collaborations
+- Funding rounds and investment news
+- Awards and industry recognition
+- Company milestones and achievements
+- Leadership changes and organizational updates
+- Market expansion and new service offerings
+- Quarterly reports and transparency updates
+- Strategic initiatives and company statements
+- Press releases from 2024-2025`,
 
   INDUSTRY_DETECTION: `What industry is {company} in? Respond with ONLY the industry name (e.g., "Software", "Healthcare", "E-commerce", etc.).`,
+} as const;
+
+// Targeted prompts with source prioritization and temporal awareness
+export const TARGETED_PROMPTS = {
+  COMPANY_SOURCES: `Search authoritative sources for {company} with current year {year}:
+- site:crunchbase.com "{company}" funding valuation employees
+- site:{company_domain}/about OR site:{company_domain}/press "{year}"
+- "{company}" "founded in" headquarters CEO founder "{year}"
+- "{company}" annual revenue ARR "{year}" millions billions`,
+
+  FINANCIAL_SOURCES: `Find exact financial metrics for {company} as of {year}:
+- "{company}" site:crunchbase.com OR site:pitchbook.com "raised $" "{year}"
+- "{company}" valuation billion million "{year}" "as of"
+- "{company}" revenue earnings "fiscal year {year}" OR "FY{year}"
+- site:businesswire.com OR site:prnewswire.com "{company}" funding "{year}"`,
+
+  INDUSTRY_SOURCES: `Research {company} market position in {industry} for {year}:
+- site:gartner.com OR site:forrester.com "{company}" {industry} "{year}"
+- "{company}" vs competitors market share percentage "{year}"
+- site:g2.com OR site:capterra.com "{company}" reviews ratings
+- "{industry}" market size growth "{company}" position "{year}"`
 } as const;
 
 // Research workflow configuration
