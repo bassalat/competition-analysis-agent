@@ -516,21 +516,24 @@ export default function AnalyzePage() {
                     let competitorAnalyses: AnalysisData[] = [];
                     let summary: Record<string, unknown> = {};
 
-                    if (data.chunked && (chunkedData.competitors.length > 0 || data.data?.competitors)) {
+                    // Try multiple data access patterns to handle different backend structures
+                    const dataSource = data.data || data; // Handle both nested and direct data
+
+                    if (data.chunked && (chunkedData.competitors.length > 0 || dataSource?.competitors)) {
                       // Use accumulated chunked data + stored summary, with fallback to direct data
-                      competitorAnalyses = chunkedData.competitors.length > 0 ? chunkedData.competitors : (data.data?.competitors || []);
+                      competitorAnalyses = chunkedData.competitors.length > 0 ? chunkedData.competitors : (dataSource?.competitors || []);
                       // CRITICAL FIX: Use stored summary from completion_metadata OR data.summary
-                      summary = (Object.keys(storedSummary).length > 0) ? storedSummary : (data.data?.summary || {});
-                      if (data.data?.businessContext) {
-                        storedBusinessContext = data.data.businessContext;
+                      summary = (Object.keys(storedSummary).length > 0) ? storedSummary : (dataSource?.summary || {});
+                      if (dataSource?.businessContext) {
+                        storedBusinessContext = dataSource.businessContext;
                       }
                       addLog('success', `Analysis completed using chunked delivery (${competitorAnalyses.length} competitors, summary with ${Object.keys(summary).length} fields)`);
                       addLog('info', `Data source: ${chunkedData.competitors.length > 0 ? 'accumulated chunks' : 'direct hybrid delivery'}`);
-                    } else if (data.data) {
+                    } else if (dataSource && (dataSource.competitors || dataSource.summary)) {
                       // Use direct data (fallback for smaller datasets)
-                      competitorAnalyses = data.data.competitors || [];
-                      summary = data.data.summary || {};
-                      storedBusinessContext = data.data.businessContext;
+                      competitorAnalyses = dataSource.competitors || [];
+                      summary = dataSource.summary || {};
+                      storedBusinessContext = dataSource.businessContext;
                       addLog('success', `Analysis completed using direct delivery (${competitorAnalyses.length} competitors)`);
                     } else {
                       // Final fallback - use whatever data we have stored
@@ -540,6 +543,13 @@ export default function AnalyzePage() {
                         addLog('success', `Analysis completed using stored chunked data (${competitorAnalyses.length} competitors)`);
                       } else {
                         addLog('success', 'Analysis completed successfully');
+                        // Even if no data, still update UI to show completion
+                        updateState({
+                          step: 'results',
+                          progress: 100,
+                          currentStage: 'Analysis complete!'
+                        });
+                        return;
                       }
                     }
 
@@ -599,8 +609,20 @@ export default function AnalyzePage() {
                     addLog('error', data.message, data);
                     throw new Error(data.message);
 
+                  case 'completion_verified':
+                    // Verification signal from backend - ensure UI is updated
+                    if (!completionReceived) {
+                      addLog('info', 'Received completion verification signal');
+                      updateState({
+                        step: 'results',
+                        progress: 100,
+                        currentStage: 'Analysis complete!'
+                      });
+                    }
+                    break;
+
                   default:
-                    console.log('Unknown stream event:', data);
+                    console.log('Unknown stream event:', data.type, data);
                 }
               } catch (parseError) {
                 console.warn('Failed to parse stream data:', parseError);
@@ -644,6 +666,7 @@ export default function AnalyzePage() {
       },
     });
   };
+
 
   const downloadReport = () => {
     window.print();

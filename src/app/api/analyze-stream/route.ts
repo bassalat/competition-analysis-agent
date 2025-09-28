@@ -398,10 +398,17 @@ export async function POST(request: NextRequest) {
                             type: 'complete',
                             progress: 100,
                             chunked: true,
-                            data: finalData, // Include FULL data for single competitor
+                            data: {
+                              competitors: finalData.competitors,
+                              summary: finalData.summary
+                            }, // Fix data structure to match frontend expectations
                             message: `Analysis completed! ${successfulAnalyses}/${competitors.length} successful. Avg cost: $${avgCostPerCompetitor.toFixed(4)}/competitor`,
                             timestamp: new Date().toISOString()
                           });
+                          sendKeepAlive(); // Force flush
+                          // Send additional flush signals
+                          setTimeout(() => sendKeepAlive(), 100);
+                          setTimeout(() => sendKeepAlive(), 300);
                         }
                       }, 800); // Extra delay to ensure chunk is processed first
                       return; // Exit early to avoid normal chunked logic
@@ -434,12 +441,25 @@ export async function POST(request: NextRequest) {
                           chunked: true,
                           // CRITICAL FIX: Include summary data for chunked delivery
                           data: {
+                            competitors: [], // Competitors already sent in chunks
                             summary: finalData.summary // Ensure summary is available for frontend
-                            // Note: businessContext is not part of finalData type, handle separately if needed
                           },
                           message: `Analysis completed! ${successfulAnalyses}/${competitors.length} successful. Avg cost: $${avgCostPerCompetitor.toFixed(4)}/competitor`,
                           timestamp: new Date().toISOString()
                         });
+                        sendKeepAlive(); // Force immediate flush
+                        // Send completion verification signal
+                        setTimeout(() => {
+                          if (!isClosed) {
+                            sendData({
+                              type: 'completion_verified',
+                              progress: 100,
+                              message: 'Analysis completed successfully',
+                              timestamp: new Date().toISOString()
+                            });
+                            sendKeepAlive();
+                          }
+                        }, 200);
                       }
                     }, competitors.length * 100 + 500);
                   } else {
@@ -448,10 +468,26 @@ export async function POST(request: NextRequest) {
                     sendData({
                       type: 'complete',
                       progress: 100,
-                      data: finalData,
+                      data: {
+                        competitors: finalData.competitors,
+                        summary: finalData.summary
+                      }, // Fix data structure to match frontend expectations
+                      message: `Analysis completed! ${successfulAnalyses}/${competitors.length} successful. Avg cost: $${avgCostPerCompetitor.toFixed(4)}/competitor`,
                       timestamp: new Date().toISOString()
                     });
                     sendKeepAlive(); // Ensure data is flushed
+                    // Send completion verification signal
+                    setTimeout(() => {
+                      if (!isClosed) {
+                        sendData({
+                          type: 'completion_verified',
+                          progress: 100,
+                          message: 'Analysis completed successfully',
+                          timestamp: new Date().toISOString()
+                        });
+                        sendKeepAlive();
+                      }
+                    }, 200);
                   }
                 }
               }, 500);
