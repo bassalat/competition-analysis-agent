@@ -8,17 +8,18 @@ import { SimplifiedCompetitorEngine } from '@/lib/engines/simplified-competitor-
 import { getAnalysisQueue, AnalysisJobData, AnalysisJobResult, AnalysisJobProgress } from '@/lib/queues/analysis-queue';
 import { cacheClient } from '@/lib/cache/api-cache';
 
-let worker: Bull.Worker | null = null;
+let worker: Bull.Queue | null = null;
 
-export function startAnalysisWorker(): Bull.Worker {
+export function startAnalysisWorker(): Bull.Queue {
   if (worker) {
     return worker;
   }
 
   const queue = getAnalysisQueue();
+  worker = queue;
 
-  worker = queue.process('analyze-competitors', 1, async (job: Bull.Job<AnalysisJobData>) => {
-    const { competitors, businessContext, analysisMode = 'standard' } = job.data;
+  queue.process('analyze-competitors', 1, async (job: Bull.Job<AnalysisJobData>) => {
+    const { competitors, businessContext } = job.data;
 
     console.log(`🔄 Starting analysis job ${job.id} for ${competitors.length} competitors`);
 
@@ -47,13 +48,53 @@ export function startAnalysisWorker(): Bull.Worker {
       // Start analysis
       updateProgress('initialization', 5, 'Initializing analysis...');
 
-      const result = await engine.analyzeCompetitors(
-        competitors,
-        businessContext,
-        (step, progress, message, competitor) => {
-          updateProgress(step, progress, message, competitor);
-        }
-      );
+      // Process competitors individually and combine results
+      const competitorResults = [];
+      let completedCount = 0;
+
+      for (const competitor of competitors) {
+        updateProgress('analyzing', (completedCount / competitors.length) * 80 + 10, `Analyzing ${competitor}...`, competitor);
+
+        const competitorResult = await engine.analyzeCompetitor(
+          { name: competitor },
+          {
+            company: 'User Company',
+            industry: 'Technology',
+            targetMarket: ['General'],
+            businessModel: 'B2B',
+            valueProposition: businessContext,
+            keyProducts: ['Software'],
+            competitiveAdvantages: ['Innovation'],
+            challenges: ['Market Competition'],
+            objectives: ['Growth'],
+          },
+          (step, progress) => {
+            const overallProgress = (completedCount / competitors.length) * 80 + (progress * 0.8 / competitors.length) + 10;
+            updateProgress(step, overallProgress, `Analyzing ${competitor}...`, competitor);
+          }
+        );
+
+        competitorResults.push(competitorResult);
+        completedCount++;
+      }
+
+      // Create combined result
+      const result = {
+        competitorCount: competitors.length,
+        analyses: competitorResults,
+        summary: 'Analysis completed successfully',
+        businessContext: {
+          company: 'User Company',
+          industry: 'Technology',
+          targetMarket: ['General'],
+          businessModel: 'B2B',
+          valueProposition: businessContext,
+          keyProducts: ['Software'],
+          competitiveAdvantages: ['Innovation'],
+          challenges: ['Market Competition'],
+          objectives: ['Growth'],
+        },
+      };
 
       updateProgress('caching', 95, 'Caching results...');
 
@@ -81,26 +122,25 @@ export function startAnalysisWorker(): Bull.Worker {
         timestamp: new Date().toISOString(),
       };
 
-      updateProgress('failed', 0, `Analysis failed: ${jobResult.error}`);
 
       throw error; // Re-throw to mark job as failed
     }
   });
 
-  // Worker event handlers
-  worker.on('completed', (job, result) => {
+  // Queue event handlers
+  queue.on('completed', (job, _result) => {
     console.log(`✅ Worker completed job ${job.id}`);
   });
 
-  worker.on('failed', (job, err) => {
+  queue.on('failed', (job, err) => {
     console.error(`❌ Worker failed job ${job.id}:`, err.message);
   });
 
-  worker.on('error', (error) => {
+  queue.on('error', (error) => {
     console.error('❌ Worker error:', error);
   });
 
-  worker.on('stalled', (job) => {
+  queue.on('stalled', (job) => {
     console.warn(`⚠️ Worker stalled on job ${job.id}`);
   });
 

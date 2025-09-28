@@ -5,7 +5,7 @@
 
 import Bull from 'bull';
 import { getRedisClient } from '../redis/client';
-import type { CompetitorAnalysisRequest, CompetitorAnalysisResponse } from '@/types/api';
+import type { SimplifiedAnalysisResult } from '@/types/api';
 
 export interface AnalysisJobData {
   competitors: string[];
@@ -17,7 +17,7 @@ export interface AnalysisJobData {
 
 export interface AnalysisJobResult {
   success: boolean;
-  data?: CompetitorAnalysisResponse;
+  data?: SimplifiedAnalysisResult;
   error?: string;
   timestamp: string;
 }
@@ -66,7 +66,7 @@ export function getAnalysisQueue(): Bull.Queue<AnalysisJobData> {
       console.log(`🔄 Job ${job.id} started processing`);
     });
 
-    analysisQueue.on('completed', (job, result) => {
+    analysisQueue.on('completed', (job, _result) => {
       console.log(`✅ Job ${job.id} completed successfully`);
     });
 
@@ -110,11 +110,11 @@ export async function addAnalysisJob(
 
 export async function getJobStatus(jobId: string): Promise<{
   id: string;
-  status: 'waiting' | 'active' | 'completed' | 'failed' | 'delayed' | 'stalled';
+  status: 'waiting' | 'active' | 'completed' | 'failed' | 'delayed' | 'stalled' | 'paused' | 'stuck';
   progress: number;
   data?: AnalysisJobData;
   result?: AnalysisJobResult;
-  error?: any;
+  error?: string;
   createdAt: Date;
   processedAt?: Date;
   finishedAt?: Date;

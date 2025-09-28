@@ -218,7 +218,7 @@ export default function AnalyzePage() {
     }
   };
 
-  const handleQueueBasedAnalysis = async (formData: FormData) => {
+  const handleQueueBasedAnalysis = async (_formData: FormData) => {
     try {
       addLog('info', 'Using Redis queue for reliable processing...');
       updateState({ currentStage: 'Creating analysis job...', progress: 15 });
@@ -375,7 +375,7 @@ export default function AnalyzePage() {
           const healthCheck = await fetch('/api/health');
           const healthData = await healthCheck.json();
           useQueue = healthData.services?.redis?.status === 'pass';
-        } catch (error) {
+        } catch (_error) {
           console.log('Health check failed, using SSE mode');
           useQueue = false;
         }

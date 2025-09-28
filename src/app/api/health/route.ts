@@ -106,22 +106,22 @@ async function testRedisConnection(): Promise<{ status: string; error?: string; 
       return {
         status: 'healthy',
         details: {
-          connected: true,
-          description: 'Redis connection active'
+          hasContent: true,
+          title: 'Redis connection active'
         }
       };
     } else {
       return {
         status: 'unhealthy',
         error: 'Redis connection failed',
-        details: { connected: false }
+        details: { hasContent: false }
       };
     }
   } catch (error) {
     return {
       status: 'unhealthy',
       error: error instanceof Error ? error.message : 'Redis connection test failed',
-      details: { connected: false }
+      details: { hasContent: false }
     };
   }
 }

@@ -8,10 +8,10 @@ import { getJobStatus, getQueueStats } from '@/lib/queues/analysis-queue';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { jobId: string } }
+  { params }: { params: Promise<{ jobId: string }> }
 ) {
   try {
-    const { jobId } = params;
+    const { jobId } = await params;
 
     if (!jobId) {
       return NextResponse.json(
@@ -66,8 +66,8 @@ export async function GET(
 }
 
 function calculateEstimatedTime(
-  jobStatus: any,
-  queueStats: any
+  jobStatus: { status: string; progress?: number; queuePosition?: number; processedAt?: Date; createdAt: Date },
+  _queueStats: { waiting: number; active: number; completed: number; failed: number; delayed: number }
 ): string | null {
   // If job is completed or failed, no time remaining
   if (jobStatus.status === 'completed' || jobStatus.status === 'failed') {
@@ -78,7 +78,7 @@ function calculateEstimatedTime(
   if (jobStatus.status === 'active') {
     const progress = jobStatus.progress || 0;
     if (progress > 0) {
-      const elapsed = Date.now() - new Date(jobStatus.processedAt || jobStatus.createdAt).getTime();
+      const elapsed = Date.now() - (jobStatus.processedAt || jobStatus.createdAt).getTime();
       const totalEstimated = (elapsed / progress) * 100;
       const remaining = Math.max(0, totalEstimated - elapsed);
       return formatTime(remaining);

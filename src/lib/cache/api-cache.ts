@@ -12,7 +12,7 @@ export class APICache {
   /**
    * Generate a cache key from the input parameters
    */
-  private generateKey(prefix: string, data: any): string {
+  private generateKey(prefix: string, data: unknown): string {
     const serialized = JSON.stringify(data);
     const hash = crypto.createHash('sha256').update(serialized).digest('hex').slice(0, 16);
     return `${prefix}:${hash}`;
@@ -21,7 +21,7 @@ export class APICache {
   /**
    * Store data in cache with TTL (time to live in seconds)
    */
-  async set(key: string, data: any, ttlSeconds: number): Promise<void> {
+  async set(key: string, data: unknown, ttlSeconds: number): Promise<void> {
     try {
       const serialized = JSON.stringify({
         data,
@@ -39,7 +39,7 @@ export class APICache {
   /**
    * Retrieve data from cache
    */
-  async get<T = any>(key: string): Promise<T | null> {
+  async get<T = unknown>(key: string): Promise<T | null> {
     try {
       const cached = await this.redis.get(key);
 
@@ -84,7 +84,7 @@ export class APICache {
   /**
    * Cache Serper search results
    */
-  async cacheSearchResults(query: string, results: any): Promise<void> {
+  async cacheSearchResults(query: string, results: unknown): Promise<void> {
     const key = this.generateKey('search', { query });
     await this.set(key, results, 3600); // 1 hour TTL
   }
@@ -92,7 +92,7 @@ export class APICache {
   /**
    * Get cached Serper search results
    */
-  async getCachedSearchResults(query: string): Promise<any | null> {
+  async getCachedSearchResults(query: string): Promise<unknown | null> {
     const key = this.generateKey('search', { query });
     return await this.get(key);
   }
@@ -100,7 +100,7 @@ export class APICache {
   /**
    * Cache Firecrawl scraping results
    */
-  async cacheScrapingResults(url: string, content: any): Promise<void> {
+  async cacheScrapingResults(url: string, content: unknown): Promise<void> {
     const key = this.generateKey('scrape', { url });
     await this.set(key, content, 3600); // 1 hour TTL
   }
@@ -108,7 +108,7 @@ export class APICache {
   /**
    * Get cached Firecrawl scraping results
    */
-  async getCachedScrapingResults(url: string): Promise<any | null> {
+  async getCachedScrapingResults(url: string): Promise<unknown | null> {
     const key = this.generateKey('scrape', { url });
     return await this.get(key);
   }
@@ -116,7 +116,7 @@ export class APICache {
   /**
    * Cache Claude API responses
    */
-  async cacheClaudeResponse(prompt: string, response: any, model: string): Promise<void> {
+  async cacheClaudeResponse(prompt: string, response: unknown, model: string): Promise<void> {
     const key = this.generateKey('claude', { prompt, model });
     await this.set(key, response, 1800); // 30 minutes TTL
   }
@@ -124,7 +124,7 @@ export class APICache {
   /**
    * Get cached Claude API responses
    */
-  async getCachedClaudeResponse(prompt: string, model: string): Promise<any | null> {
+  async getCachedClaudeResponse(prompt: string, model: string): Promise<unknown | null> {
     const key = this.generateKey('claude', { prompt, model });
     return await this.get(key);
   }
@@ -132,7 +132,7 @@ export class APICache {
   /**
    * Cache full analysis results
    */
-  async cacheAnalysisResult(competitors: string[], businessContext: string, result: any): Promise<void> {
+  async cacheAnalysisResult(competitors: string[], businessContext: string, result: unknown): Promise<void> {
     const key = this.generateKey('analysis', { competitors, businessContext });
     await this.set(key, result, 7200); // 2 hours TTL
   }
@@ -140,7 +140,7 @@ export class APICache {
   /**
    * Get cached analysis results
    */
-  async getCachedAnalysisResult(competitors: string[], businessContext: string): Promise<any | null> {
+  async getCachedAnalysisResult(competitors: string[], businessContext: string): Promise<unknown | null> {
     const key = this.generateKey('analysis', { competitors, businessContext });
     return await this.get(key);
   }

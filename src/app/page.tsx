@@ -5,10 +5,8 @@
 'use client';
 
 import Link from 'next/link';
-import { Brain, FileText, Users, BarChart3, ChevronRight, Lightbulb, Target, Shield } from 'lucide-react';
+import { Brain, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 
 export default function Home() {
   return (

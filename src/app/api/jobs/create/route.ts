@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
 
     // Create job data
     const jobData: AnalysisJobData = {
-      competitors: competitors.map((c: any) => typeof c === 'string' ? c : c.name),
+      competitors: competitors.map((c: string | { name: string }) => typeof c === 'string' ? c : c.name),
       businessContext,
       analysisMode,
       userId: userId || 'anonymous',

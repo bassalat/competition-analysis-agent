@@ -18,18 +18,8 @@ export function getRedisClient(): Redis {
     }
 
     redis = new Redis(redisUrl, {
-      // Connection pool settings
       maxRetriesPerRequest: 3,
-      retryDelayOnFailover: 100,
-      enableReadyCheck: true,
-      maxLoadingTimeout: 5000,
-
-      // Connection settings for Railway
       lazyConnect: true,
-      keepAlive: 30000,
-
-      // Error handling
-      retryDelayOnConnectFail: (times: number) => Math.min(times * 50, 2000),
     });
 
     // Connection event handlers
