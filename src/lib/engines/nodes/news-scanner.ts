@@ -106,7 +106,7 @@ export class NewsScanner extends BaseResearcher {
           onUpdate
         );
 
-        news_data = await this.scrapeDocuments(news_data, 2);
+        news_data = await this.scrapeDocuments(news_data, 2, state, onUpdate);
       }
 
       msg.push(`\n✓ Found ${Object.keys(news_data).length} documents`);

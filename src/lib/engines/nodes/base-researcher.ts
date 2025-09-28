@@ -116,7 +116,9 @@ export abstract class BaseResearcher {
    */
   protected async scrapeDocuments(
     documents: Record<string, DocumentData>,
-    maxUrls: number = 3
+    maxUrls: number = 3,
+    state?: ResearchState,
+    onUpdate?: UpdateCallback
   ): Promise<Record<string, DocumentData>> {
     const urlsToScrape = Object.keys(documents)
       .slice(0, maxUrls)
@@ -158,7 +160,7 @@ export abstract class BaseResearcher {
       console.log(`✅ Successfully scraped ${scrapedCount} documents`);
 
       // Send update with scraped count
-      if (scrapedCount > 0) {
+      if (scrapedCount > 0 && state && onUpdate) {
         await this.sendUpdate(
           state,
           `Scraped ${scrapedCount} documents`,

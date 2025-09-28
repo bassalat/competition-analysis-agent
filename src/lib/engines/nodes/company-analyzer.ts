@@ -77,7 +77,7 @@ export class CompanyAnalyzer extends BaseResearcher {
           onUpdate
         );
 
-        company_data = await this.scrapeDocuments(company_data, 3);
+        company_data = await this.scrapeDocuments(company_data, 3, state, onUpdate);
       }
 
       msg.push(`\n✓ Found ${Object.keys(company_data).length} documents`);

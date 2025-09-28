@@ -83,7 +83,7 @@ export class FinancialAnalyst extends BaseResearcher {
           onUpdate
         );
 
-        financial_data = await this.scrapeDocuments(financial_data, 2);
+        financial_data = await this.scrapeDocuments(financial_data, 2, state, onUpdate);
       }
 
       // Final status update

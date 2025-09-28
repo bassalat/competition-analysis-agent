@@ -78,7 +78,7 @@ export class IndustryAnalyzer extends BaseResearcher {
           onUpdate
         );
 
-        industry_data = await this.scrapeDocuments(industry_data, 3);
+        industry_data = await this.scrapeDocuments(industry_data, 3, state, onUpdate);
       }
 
       msg.push(`\n✓ Found ${Object.keys(industry_data).length} documents`);
