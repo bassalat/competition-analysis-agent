@@ -333,17 +333,19 @@ export default function AnalyzePage() {
           };
           attemptRecovery();
         }
-      }, 15000); // Extended timeout to 15 seconds
+      }, 120000); // Extended timeout to 2 minutes for Claude Sonnet 4 calls
 
       try {
         let lastDataTime = Date.now();
         const connectionMonitor = setInterval(() => {
           const timeSinceLastData = Date.now() - lastDataTime;
-          if (timeSinceLastData > 30000 && !completionReceived) { // 30 seconds without data
-            console.warn('No data received for 30 seconds, connection may be stalled');
-            addLog('warning', 'Connection appears stalled, but this is normal for Railway production environments during final processing');
+          if (timeSinceLastData > 60000 && !completionReceived) { // 60 seconds without data
+            console.warn('No data received for 60 seconds, connection may be stalled');
+            addLog('warning', 'Connection appears stalled, but this is normal for Railway production environments during final processing. Claude AI may be taking longer to generate comprehensive reports.');
+          } else if (timeSinceLastData > 40000 && !completionReceived) { // 40 seconds - intermediate warning
+            addLog('info', 'Claude AI is working on comprehensive report synthesis. This may take up to 2 minutes for detailed analysis.');
           }
-        }, 10000); // Check every 10 seconds
+        }, 15000); // Check every 15 seconds
 
         while (true) {
           const { done, value } = await reader.read();

@@ -112,7 +112,7 @@ export class SimplifiedCompetitorEngine {
 
       // Step 5: Synthesize report
       progressCallback?.('Synthesizing report...', 80);
-      result.finalReport = await this.synthesizeReport(competitor, result);
+      result.finalReport = await this.synthesizeReport(competitor, result, progressCallback);
 
       result.metadata.success = true;
       progressCallback?.('Analysis complete!', 100);
@@ -551,7 +551,7 @@ Select exactly 20 URLs, prioritizing the high-value data sources above.`;
   /**
    * Step 5: Synthesize comprehensive report using Claude Sonnet
    */
-  private async synthesizeReport(competitor: Competitor, analysisData: CompetitorAnalysisResult): Promise<string> {
+  private async synthesizeReport(competitor: Competitor, analysisData: CompetitorAnalysisResult, progressCallback?: (step: string, progress: number) => void): Promise<string> {
     const successfulContent = analysisData.scrapedContent.filter(sc => sc.success);
 
     if (successfulContent.length === 0) {
@@ -685,17 +685,43 @@ Create a detailed, linear competitive intelligence report with the following str
 6. Make the threat assessment realistic and well-reasoned
 7. Ensure the strategic recommendations are specific and implementable`;
 
-    const response = await this.claude.complete(prompt, {
-      model: 'claude-sonnet-4-20250514', // Use Sonnet 4 for high-quality synthesis
-      maxTokens: 4000, // Increased for more comprehensive reports
-      temperature: 0.2 // Lower temperature for more factual, structured output
-    });
+    // Provide progressive updates during Claude API call
+    progressCallback?.('Preparing Claude API request...', 82);
 
-    if (!response.success || !response.data) {
-      throw new Error(`Failed to synthesize report: ${response.error || 'No data returned'}`);
+    // Start the Claude API call with a timeout for long operations
+    progressCallback?.('Calling Claude AI for report synthesis...', 85);
+
+    // Create a progress updater during the long Claude operation
+    const progressTimer = setInterval(() => {
+      const messages = [
+        'Claude AI is analyzing scraped content...',
+        'Generating comprehensive competitive analysis...',
+        'Synthesizing strategic insights...',
+        'Finalizing competitive intelligence report...'
+      ];
+      const randomMessage = messages[Math.floor(Math.random() * messages.length)];
+      progressCallback?.(randomMessage, 87 + Math.random() * 5); // 87-92% progress
+    }, 5000); // Update every 5 seconds
+
+    try {
+      const response = await this.claude.complete(prompt, {
+        model: 'claude-sonnet-4-20250514', // Use Sonnet 4 for high-quality synthesis
+        maxTokens: 4000, // Increased for more comprehensive reports
+        temperature: 0.2 // Lower temperature for more factual, structured output
+      });
+
+      clearInterval(progressTimer);
+      progressCallback?.('Report synthesis complete!', 95);
+
+      if (!response.success || !response.data) {
+        throw new Error(`Failed to synthesize report: ${response.error || 'No data returned'}`);
+      }
+
+      return response.data;
+    } catch (error) {
+      clearInterval(progressTimer);
+      throw error;
     }
-
-    return response.data;
   }
 
   /**

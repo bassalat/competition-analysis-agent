@@ -147,7 +147,12 @@ export async function POST(request: NextRequest) {
             controller.enqueue(encoder.encode(message));
           } catch (error) {
             console.warn('Failed to send data:', error);
-            isClosed = true;
+            // Mark as closed if controller errors occur
+            if ((error as any)?.code === 'ERR_INVALID_STATE' || (error as any)?.message?.includes('Controller is already closed')) {
+              isClosed = true;
+            } else {
+              isClosed = true;
+            }
           }
         };
 
@@ -160,11 +165,19 @@ export async function POST(request: NextRequest) {
             controller.enqueue(encoder.encode(keepAlive));
           } catch (error) {
             console.warn('Failed to send keep-alive:', error);
+            // Mark as closed if controller errors occur
+            if ((error as any)?.code === 'ERR_INVALID_STATE' || (error as any)?.message?.includes('Controller is already closed')) {
+              isClosed = true;
+            }
           }
         };
 
         // Set up periodic keep-alive messages to prevent proxy buffering
         const keepAliveInterval = setInterval(() => {
+          if (isClosed) {
+            clearInterval(keepAliveInterval);
+            return;
+          }
           sendKeepAlive();
         }, 2000); // Every 2 seconds
 
