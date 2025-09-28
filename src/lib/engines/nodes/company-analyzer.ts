@@ -4,13 +4,13 @@
  */
 
 import { BaseResearcher, UpdateCallback } from './base-researcher';
-import { ResearchState, RESEARCH_PROMPTS } from '@/types/research';
+import { ResearchState, DocumentData, RESEARCH_PROMPTS } from '@/types/research';
 
 export class CompanyAnalyzer extends BaseResearcher {
   async analyze(
     state: ResearchState,
     onUpdate?: UpdateCallback
-  ): Promise<{ message: string; company_data: Record<string, any> }> {
+  ): Promise<{ message: string; company_data: Record<string, DocumentData> }> {
     const company = state.company;
     const msg = [`🏢 Company Analyzer analyzing ${company}`];
 
@@ -44,7 +44,7 @@ export class CompanyAnalyzer extends BaseResearcher {
       onUpdate
     );
 
-    let company_data: Record<string, any> = {};
+    let company_data: Record<string, DocumentData> = {};
 
     // Include site_scrape data if available (following repo pattern)
     if (state.site_scrape) {

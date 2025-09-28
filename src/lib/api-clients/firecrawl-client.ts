@@ -30,6 +30,21 @@ export interface FirecrawlScrapeResult {
   error?: string;
 }
 
+export interface FirecrawlMetadata {
+  title: string;
+  description?: string;
+  keywords?: string;
+  robots?: string;
+  ogTitle?: string;
+  ogDescription?: string;
+  ogUrl?: string;
+  ogImage?: string;
+  ogLocale?: string;
+  ogSiteName?: string;
+  sourceURL: string;
+  statusCode: number;
+}
+
 export interface FirecrawlOptions {
   formats?: ('markdown' | 'html' | 'rawHtml' | 'links' | 'screenshot')[];
   headers?: Record<string, string>;
@@ -55,7 +70,7 @@ export class FirecrawlClient {
   async scrape(
     url: string,
     options: FirecrawlOptions = {}
-  ): Promise<ApiResponse<{ content: string; markdown: string; metadata: any }>> {
+  ): Promise<ApiResponse<{ content: string; markdown: string; metadata: FirecrawlMetadata }>> {
     const {
       formats = ['markdown', 'html'],
       headers = {},
@@ -79,7 +94,7 @@ export class FirecrawlClient {
     const operation = async (): Promise<{
       content: string;
       markdown: string;
-      metadata: any;
+      metadata: FirecrawlMetadata;
     }> => {
       const response = await withTimeout(
         fetch(`${this.baseUrl}/scrape`, {
@@ -120,7 +135,7 @@ export class FirecrawlClient {
       return {
         content: content.trim(),
         markdown: markdown.trim(),
-        metadata: data.metadata || {},
+        metadata: data.metadata,
       };
     };
 
@@ -141,7 +156,7 @@ export class FirecrawlClient {
     url: string;
     content: string;
     markdown: string;
-    metadata: any;
+    metadata: FirecrawlMetadata;
     success: boolean;
     error?: string;
   }>>> {
@@ -151,7 +166,7 @@ export class FirecrawlClient {
       url: string;
       content: string;
       markdown: string;
-      metadata: any;
+      metadata: FirecrawlMetadata;
       success: boolean;
       error?: string;
     }> = [];
@@ -172,7 +187,7 @@ export class FirecrawlClient {
             url,
             content: '',
             markdown: '',
-            metadata: {},
+            metadata: { title: '', sourceURL: url, statusCode: 0 } as FirecrawlMetadata,
             success: false,
             error: result.error || 'Scraping failed',
           });
@@ -182,7 +197,7 @@ export class FirecrawlClient {
           url,
           content: '',
           markdown: '',
-          metadata: {},
+          metadata: { title: '', sourceURL: url, statusCode: 0 } as FirecrawlMetadata,
           success: false,
           error: formatErrorMessage(error),
         });

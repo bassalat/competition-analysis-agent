@@ -4,13 +4,13 @@
  */
 
 import { BaseResearcher, UpdateCallback } from './base-researcher';
-import { ResearchState, RESEARCH_PROMPTS } from '@/types/research';
+import { ResearchState, DocumentData, RESEARCH_PROMPTS } from '@/types/research';
 
 export class NewsScanner extends BaseResearcher {
   async analyze(
     state: ResearchState,
     onUpdate?: UpdateCallback
-  ): Promise<{ message: string; news_data: Record<string, any> }> {
+  ): Promise<{ message: string; news_data: Record<string, DocumentData> }> {
     const company = state.company;
     const msg = [`📰 News Scanner analyzing ${company}`];
 
@@ -44,7 +44,7 @@ export class NewsScanner extends BaseResearcher {
       onUpdate
     );
 
-    let news_data: Record<string, any> = {};
+    let news_data: Record<string, DocumentData> = {};
 
     // Include site_scrape data for news analysis (following repo pattern)
     if (state.site_scrape) {

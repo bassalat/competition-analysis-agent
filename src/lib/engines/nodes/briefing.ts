@@ -4,7 +4,7 @@
  */
 
 import { BaseResearcher, UpdateCallback } from './base-researcher';
-import { ResearchState } from '@/types/research';
+import { ResearchState, DocumentData } from '@/types/research';
 import { config } from '@/lib/config';
 
 export class Briefing extends BaseResearcher {
@@ -35,7 +35,15 @@ export class Briefing extends BaseResearcher {
     ];
 
     for (const category of categories) {
-      const categoryData = (state as any)[category.dataKey];
+      const categoryData = (() => {
+        switch (category.dataKey) {
+          case 'company_data': return state.company_data || {};
+          case 'industry_data': return state.industry_data || {};
+          case 'financial_data': return state.financial_data || {};
+          case 'news_data': return state.news_data || {};
+          default: return {};
+        }
+      })();
 
       if (categoryData && Object.keys(categoryData).length > 0) {
         try {
@@ -52,12 +60,25 @@ export class Briefing extends BaseResearcher {
           const briefing = await this.generateCategoryBriefing(
             state,
             category.name,
-            categoryData,
-            onUpdate
+            categoryData
           );
 
           if (briefing) {
-            (state as any)[category.briefingKey] = briefing;
+            // Set briefing directly on state with proper typing
+            switch (category.briefingKey) {
+              case 'company_briefing':
+                state.company_briefing = briefing;
+                break;
+              case 'industry_briefing':
+                state.industry_briefing = briefing;
+                break;
+              case 'financial_briefing':
+                state.financial_briefing = briefing;
+                break;
+              case 'news_briefing':
+                state.news_briefing = briefing;
+                break;
+            }
             briefingsGenerated.push(category.name);
             console.log(`✅ Generated ${category.name} briefing (${briefing.length} chars)`);
           }
@@ -99,8 +120,7 @@ export class Briefing extends BaseResearcher {
   private async generateCategoryBriefing(
     state: ResearchState,
     categoryName: string,
-    categoryData: Record<string, any>,
-    onUpdate?: UpdateCallback
+    categoryData: Record<string, DocumentData>
   ): Promise<string> {
     const documents = Object.values(categoryData);
 
@@ -114,8 +134,15 @@ export class Briefing extends BaseResearcher {
       .join('\n\n');
 
     // Get enrichment data if available
-    const enrichmentKey = `${categoryName}_enrichment`;
-    const enrichmentData = (state as any)[enrichmentKey] || '';
+    const enrichmentData = (() => {
+      switch (categoryName) {
+        case 'company': return state.company_enrichment || '';
+        case 'industry': return state.industry_enrichment || '';
+        case 'financial': return state.financial_enrichment || '';
+        case 'news': return state.news_enrichment || '';
+        default: return '';
+      }
+    })();
 
     const prompt = this.getBriefingPrompt(
       categoryName,

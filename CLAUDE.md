@@ -19,7 +19,7 @@ competitor-intel-ai/
 │   │   ├── page.tsx           # Landing page
 │   │   └── layout.tsx         # Root layout
 │   ├── lib/                   # Core libraries and engines
-│   │   ├── engines/           # Analysis engines (simplified-competitor-engine.ts)
+│   │   ├── engines/           # Analysis engines (competitor-research-engine.ts)
 │   │   ├── api-clients/       # External API integrations
 │   │   ├── file-processing/   # Document processing utilities
 │   │   ├── config.ts          # Environment configuration
@@ -45,15 +45,15 @@ competitor-intel-ai/
 - **Layout**: `src/app/layout.tsx` - Root layout with metadata and global styles
 
 ### Backend API Routes (`src/app/api/`)
-- **`/api/analyze`** - Main analysis endpoint using simplified 5-step process
-- **`/api/analyze-stream`** - Streaming analysis with real-time step updates
+- **`/api/research-competitor`** - Main competitor research endpoint using comprehensive 9-step process
+- **`/api/research-competitor-stream`** - Streaming research with real-time step updates
 - **`/api/process-documents`** - Document processing and text extraction
-- **`/api/suggest-competitors`** - AI-powered competitor suggestions
 - **`/api/health`** - System health and configuration validation
 
 ### Core Libraries (`src/lib/`)
 - **`config.ts`** - Environment variable management and validation
-- **`engines/simplified-competitor-engine.ts`** - Main 5-step analysis engine (~$0.20/competitor)
+- **`engines/competitor-research-engine.ts`** - Main comprehensive research engine (~$0.30/competitor)
+- **`engines/nodes/`** - Research node implementations (company-analyzer.ts, industry-analyzer.ts, financial-analyst.ts, news-scanner.ts, collector.ts, curator.ts, enricher.ts, briefing.ts, editor.ts)
 - **`engines/index.ts`** - Engine exports and initialization
 - **`api-clients/`** - External API integrations (claude-client.ts, serper-client.ts, firecrawl-client.ts)
 - **`file-processing/`** - Document extraction utilities (document-parser.ts, text-extractor.ts, file-validator.ts)
@@ -62,13 +62,36 @@ competitor-intel-ai/
 
 ### Type Definitions (`src/types/`)
 - **`api.ts`** - Comprehensive API types for Claude, Serper, Firecrawl, and business entities
+- **`research.ts`** - Research workflow types, ResearchState interface, and ResearchUpdate streaming types
 - **`env.d.ts`** - Environment variable type definitions
 
 ### UI Components (`src/components/`)
 - **`ui/`** - Shadcn/ui components: Button, Card, Dialog, Progress, Tabs, etc.
-- **`analysis/`** - Analysis-specific components
+- **`analysis/`** - Document upload and competitor input components (FileUploadZone, CompetitorInput)
+- **`research/`** - Research-specific components:
+  - **`CompetitorResearchCard`** - Real-time research progress display with step tracking
+  - **`ResearchProgress`** - Overall research workflow progress indicator
+  - **`ResearchResults`** - Displays research results with briefings and final report
 - **`layout/`** - Layout and navigation components
 - All styled with Tailwind CSS v4
+
+### Research State Management
+The system uses a sophisticated state management pattern for research workflows:
+
+**ResearchState Interface** (`src/types/research.ts`):
+- **Core Information**: company, industry, hq_location
+- **Research Data**: company_data, industry_data, financial_data, news_data (DocumentData records)
+- **Briefings**: company_briefing, industry_briefing, financial_briefing, news_briefing
+- **Progress Tracking**: currentStep, completedSteps, status, messages
+- **References**: references array, reference_info, reference_titles for citations
+- **Site Data**: site_scrape for company website content
+
+**ResearchUpdate Interface** (SSE streaming):
+- **Types**: 'status', 'progress', 'result', 'error'
+- **Step Tracking**: Specific research step being executed
+- **Progress Indicators**: Percentage completion with detailed messages
+- **Data Payload**: Intermediate results and final research output
+- **Timestamps**: Real-time progress tracking with ISO timestamps
 
 ## Development Commands
 
@@ -87,9 +110,9 @@ npm install                # Install all dependencies
 
 ### Linting and Code Quality
 - The project uses ESLint with TypeScript rules
-- **Current status**: All lint issues have been resolved (0 errors, 0 warnings)
+- **Current status**: 8 errors, 5 warnings (primarily @typescript-eslint/no-explicit-any and unused variables)
 - TypeScript strict mode enabled with proper type safety throughout the codebase
-- **Important**: Maintain code quality by fixing any new lint errors before committing
+- **Important**: Address lint errors before committing, especially TypeScript any types
 - TypeScript compilation: Run `npx tsc --noEmit` to check types without building
 
 ## Configuration Setup
@@ -113,20 +136,21 @@ To reduce API costs by up to 70%, configure different Claude models for differen
 - Serper: 100 requests/minute
 - Firecrawl: 10 requests/minute
 
-### Simplified Analysis Architecture
-The system uses a streamlined 5-step process targeting ~$0.20 per competitor:
+### Comprehensive Research Architecture
+The system uses a comprehensive 9-step process following the company-research-agent pattern, targeting ~$0.30 per competitor:
 
-**Step 1: Query Generation** (Haiku 3.5) - Generate 12 targeted search queries
-**Step 2: Search Execution** (Serper API) - Execute searches and collect results
-**Step 3: URL Prioritization** (Haiku 3.5) - Select most relevant URLs to scrape
-**Step 4: Content Scraping** (Firecrawl API) - Extract content from prioritized URLs
-**Step 5: Report Synthesis** (Sonnet 4) - Generate final competitive intelligence report
+**Step 1: Grounding** - Initialize research context and scrape company website if available
+**Step 2-5: Parallel Research Nodes** - Execute company_analyzer, industry_analyzer, financial_analyst, news_scanner in parallel
+**Step 6: Collector** - Aggregate all research data from parallel nodes
+**Step 7: Curator** - Prioritize and filter collected information
+**Step 8: Enricher** - Enhance data with additional context and analysis
+**Step 9: Briefing & Editor** - Generate section briefings and final comprehensive report
 
 ### Cost Optimization
-- **Query Generation**: ~$0.01 using Haiku 3.5
-- **URL Prioritization**: ~$0.01 using Haiku 3.5
-- **Report Synthesis**: ~$0.15-0.18 using Sonnet 4
-- **Total per competitor**: ~$0.17-0.20 (90% cost reduction from previous system)
+- **Research Nodes**: ~$0.10-0.15 across 4 parallel nodes using varied models
+- **Collector/Curator/Enricher**: ~$0.05-0.08 using optimized prompts
+- **Final Report Generation**: ~$0.10-0.12 using Sonnet 4
+- **Total per competitor**: ~$0.25-0.30 (comprehensive analysis with multi-perspective insights)
 
 ## Key Dependencies
 
@@ -170,30 +194,54 @@ The system implements a **unified SSE event model** for reliable real-time progr
 - **Simplified debugging** - Single data flow instead of complex event choreography
 - **Production ready** - Reduced failure points and timeout handling
 
-### Simplified Engine Architecture
-The system uses a single, streamlined engine instead of multiple complex engines:
+### Comprehensive Research Engine Architecture
+The system uses a sophisticated multi-node research engine following the company-research-agent pattern:
 
-**SimplifiedCompetitorEngine** (`src/lib/engines/simplified-competitor-engine.ts`):
-- Implements the 5-step analysis process with real-time callbacks
-- Returns all intermediate data for full transparency
-- Costs ~$0.20 per competitor analysis
-- Uses markdown format throughout (no complex JSON structures)
-- Provides step-by-step callbacks for live UI updates
+**CompetitorResearchEngine** (`src/lib/engines/competitor-research-engine.ts`):
+- Implements the comprehensive 9-step research workflow with real-time callbacks
+- Orchestrates parallel research nodes for multi-perspective analysis
+- Returns all intermediate research data for full transparency
+- Costs ~$0.30 per competitor analysis (comprehensive insights)
+- Uses structured research state management with ResearchState interface
+- Provides granular step-by-step callbacks for live UI updates
 
-### Data Flow
-1. **Document Upload** → Extract business context and competitors
-2. **Query Generation** → Claude generates 12 targeted search queries → **UI Update**
-3. **Search & Prioritization** → Serper searches + Claude URL selection → **UI Update**
-4. **Content Extraction** → Firecrawl scrapes prioritized URLs → **UI Update**
-5. **Report Generation** → Claude synthesizes final intelligence report → **UI Update**
+**Research Nodes** (`src/lib/engines/nodes/`):
+- **CompanyAnalyzer** - Direct company research and competitive positioning
+- **IndustryAnalyzer** - Market dynamics and industry trend analysis
+- **FinancialAnalyst** - Business model and financial performance insights
+- **NewsScanner** - Recent news and market developments
+- **Collector** - Aggregates research data from all nodes
+- **Curator** - Filters and prioritizes collected information
+- **Enricher** - Enhances data with additional context
+- **Briefing** - Generates section summaries for each research category
+- **Editor** - Synthesizes final comprehensive competitive intelligence report
 
-### Transparency Pattern
-All intermediate data is preserved and returned to users:
-- `searchQueries` - Generated search terms (live counter)
-- `searchResults` - Raw search results from Serper (live counter)
-- `prioritizedUrls` - URLs selected for scraping (live counter)
-- `scrapedContent` - Raw content from Firecrawl (live counter)
-- `finalReport` - Synthesized competitive intelligence (preview + full)
+### Research Workflow Data Flow
+1. **Grounding** → Initialize research context, scrape company website → **UI Update**
+2. **Parallel Research Execution** → All research nodes execute simultaneously:
+   - Company analysis queries and data collection → **UI Update**
+   - Industry analysis and market research → **UI Update**
+   - Financial analysis and business model research → **UI Update**
+   - News scanning and recent developments → **UI Update**
+3. **Collection** → Aggregate all research data from parallel nodes → **UI Update**
+4. **Curation** → Filter and prioritize collected information → **UI Update**
+5. **Enrichment** → Enhance data with additional context and analysis → **UI Update**
+6. **Briefing** → Generate section summaries for each research category → **UI Update**
+7. **Report Synthesis** → Create final comprehensive competitive intelligence report → **UI Update**
+
+### Research Transparency Pattern
+All intermediate research data is preserved and returned to users through ResearchState:
+- `company_data` - Company-specific research documents and analysis
+- `industry_data` - Industry analysis and market research results
+- `financial_data` - Financial and business model insights
+- `news_data` - Recent news and market developments
+- `company_briefing` - Company analysis summary
+- `industry_briefing` - Industry analysis summary
+- `financial_briefing` - Financial analysis summary
+- `news_briefing` - News analysis summary
+- `references` - All source URLs and citations used
+- `reference_info` - Detailed metadata for each source
+- `finalReport` - Comprehensive competitive intelligence report
 
 ### Error Handling Strategy
 - Configuration validation on startup with pre-flight API health checks
@@ -209,8 +257,8 @@ All intermediate data is preserved and returned to users:
 
 ## Development Notes
 
-### Production Analysis Mode
-The `/api/analyze` and `/api/analyze-stream` endpoints are fully functional and integrate with all configured external APIs (Claude, Serper, Firecrawl) for comprehensive competitive intelligence analysis.
+### Production Research Mode
+The `/api/research-competitor` and `/api/research-competitor-stream` endpoints are fully functional and integrate with all configured external APIs (Claude, Serper, Firecrawl) for comprehensive competitive intelligence research following the company-research-agent workflow.
 
 **Streaming Architecture (Commit 29af79f)**:
 - Single `update` event type with complete state transmission
@@ -260,31 +308,36 @@ npx tsc --noEmit    # Check TypeScript types without building
 
 ## Key Business Logic
 
-The system implements a streamlined 5-step competitive intelligence workflow:
+The system implements a comprehensive 9-step competitive intelligence research workflow following the company-research-agent pattern:
 
-1. **Document Intelligence**: Extract business context from uploaded documents
-2. **Query Generation**: Generate 12 targeted search queries using Claude Haiku 3.5
-3. **Search & Discovery**: Execute searches via Serper API and collect organic results
-4. **Content Prioritization**: Use Claude Haiku 3.5 to select most relevant URLs for scraping
-5. **Intelligence Synthesis**: Generate comprehensive competitive analysis using Claude Sonnet 4
+1. **Grounding**: Initialize research context and scrape company website if available
+2. **Company Analysis**: Direct company research, competitive positioning, and business model analysis
+3. **Industry Analysis**: Market dynamics, industry trends, and competitive landscape research
+4. **Financial Analysis**: Business model insights, financial performance, and market positioning
+5. **News Analysis**: Recent developments, market news, and trend identification
+6. **Collection**: Aggregate and organize all research data from parallel analysis nodes
+7. **Curation**: Filter, prioritize, and validate collected information for relevance and accuracy
+8. **Enrichment**: Enhance research data with additional context and cross-referencing
+9. **Report Generation**: Synthesize comprehensive competitive intelligence report with section briefings
 
 ### Key Features
-- **Cost Efficient**: ~$0.20 per competitor (90% cost reduction)
-- **Transparent**: All intermediate data visible to users
-- **Streaming**: Real-time progress updates via Server-Sent Events
-- **Format Agnostic**: Supports PDF, DOCX, TXT, and other document types
-- **Markdown Native**: Uses markdown throughout for better readability
+- **Comprehensive**: Multi-perspective analysis with parallel research nodes (~$0.30 per competitor)
+- **Transparent**: All intermediate research data preserved and accessible to users
+- **Streaming**: Real-time progress updates via Server-Sent Events with granular step tracking
+- **Format Agnostic**: Supports PDF, DOCX, TXT, and other document types for context extraction
+- **Research Focused**: Following proven company-research-agent methodology for thorough competitive intelligence
 
-This represents a simplified, cost-effective competitive intelligence platform optimized for speed and transparency.
+This represents a comprehensive, research-driven competitive intelligence platform optimized for depth and accuracy.
 
 ## Current Architecture State
 
-**Active Commit**: `29af79f` - "Simplify SSE architecture with single update event for reliable real-time progress"
+**Active Commit**: `daeffbe` - "Implement comprehensive competitor research system following company-research-agent"
 
-This commit represents the stable, simplified architecture that resolves production timeout issues:
-- **Backend**: Single SSE event type (`update`) with complete state transmission
-- **Frontend**: Unified event handler replacing complex multi-event processing
-- **Real-time UI**: Live competitor progress cards showing search queries, results, URLs, and content counters
-- **Reliability**: Eliminates "stuck at 99%" issues through complete state updates
+This commit represents the current comprehensive research architecture:
+- **Backend**: CompetitorResearchEngine with 9-step workflow using parallel research nodes
+- **Research Nodes**: Company, Industry, Financial, and News analyzers with specialized prompts
+- **Workflow**: Grounding → Parallel Research → Collection → Curation → Enrichment → Briefing → Report
+- **Real-time UI**: Research progress tracking through ResearchState with granular step updates
+- **Streaming**: SSE updates for each research step with detailed progress and intermediate results
 
-**Note**: Later commits (CSP fixes, ReactMarkdown changes) were reverted to maintain this stable architecture.
+**Note**: This architecture follows the proven company-research-agent methodology for comprehensive competitive intelligence.

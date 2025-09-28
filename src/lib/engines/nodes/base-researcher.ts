@@ -169,7 +169,7 @@ export abstract class BaseResearcher {
   protected async sendUpdate(
     state: ResearchState,
     message: string,
-    data?: any,
+    data?: Record<string, unknown>,
     onUpdate?: UpdateCallback
   ): Promise<void> {
     if (onUpdate && state.currentStep) {
@@ -190,7 +190,7 @@ export abstract class BaseResearcher {
   abstract analyze(
     state: ResearchState,
     onUpdate?: UpdateCallback
-  ): Promise<{ message: string; [key: string]: any }>;
+  ): Promise<{ message: string; [key: string]: unknown }>;
 
   /**
    * Main run method that wraps the analyze method

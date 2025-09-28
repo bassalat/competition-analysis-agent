@@ -28,8 +28,6 @@ export class Editor extends BaseResearcher {
     );
 
     const company = state.company;
-    const industry = state.industry;
-    const hq_location = state.hq_location;
 
     // Collect individual briefings
     const briefingKeys = {
@@ -51,7 +49,15 @@ export class Editor extends BaseResearcher {
 
     const individualBriefings: Record<string, string> = {};
     for (const [category, key] of Object.entries(briefingKeys)) {
-      const content = (state as any)[key];
+      const content = (() => {
+        switch (key) {
+          case 'company_briefing': return state.company_briefing;
+          case 'industry_briefing': return state.industry_briefing;
+          case 'financial_briefing': return state.financial_briefing;
+          case 'news_briefing': return state.news_briefing;
+          default: return undefined;
+        }
+      })();
       if (content) {
         individualBriefings[category] = content;
         console.log(`Found ${category} briefing (${content.length} characters)`);
@@ -86,7 +92,7 @@ export class Editor extends BaseResearcher {
         onUpdate
       );
 
-      const initialReport = await this.compileContent(state, individualBriefings, onUpdate);
+      const initialReport = await this.compileContent(state, individualBriefings);
       if (!initialReport) {
         throw new Error('Initial compilation failed');
       }
@@ -149,8 +155,7 @@ export class Editor extends BaseResearcher {
    */
   private async compileContent(
     state: ResearchState,
-    briefings: Record<string, string>,
-    onUpdate?: UpdateCallback
+    briefings: Record<string, string>
   ): Promise<string> {
     const combinedContent = Object.values(briefings).join('\n\n');
 
@@ -159,7 +164,6 @@ export class Editor extends BaseResearcher {
     if (state.references && state.references.length > 0) {
       console.log(`Adding ${state.references.length} references to report`);
 
-      const referenceInfo = state.reference_info || {};
       const referenceTitles = state.reference_titles || {};
 
       const formattedReferences = state.references

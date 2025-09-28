@@ -14,7 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Competitor, BusinessContext } from '@/types/api';
-import { ResearchProgress, CompetitorResearchResult, ResearchUpdate } from '@/types/research';
+import { ResearchProgress, CompetitorResearchResult, ResearchUpdate, ResearchState } from '@/types/research';
 
 interface CompetitorResearchCardProps {
   competitor: Competitor;
@@ -136,6 +136,7 @@ export function CompetitorResearchCard({
     } finally {
       setIsResearching(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [competitor, businessContext, isResearching, onResearchStart]);
 
   // Handle progress updates from SSE
@@ -176,13 +177,22 @@ export function CompetitorResearchCard({
         newProgress.progress = 100;
 
         // Set final result
-        const resultData = update.data as any;
-        if (resultData.report) {
+        const resultData = update.data;
+        if (resultData?.report) {
           const finalResult: CompetitorResearchResult = {
             competitor,
-            state: {} as any,
+            state: {
+              company: competitor.name,
+              industry: 'Unknown',
+              hq_location: 'Unknown',
+            } as ResearchState,
             report: resultData.report,
-            briefings: resultData.briefings || { company: '', industry: '', financial: '', news: '' },
+            briefings: {
+              company: resultData.briefings?.company || '',
+              industry: resultData.briefings?.industry || '',
+              financial: resultData.briefings?.financial || '',
+              news: resultData.briefings?.news || '',
+            },
             metadata: resultData.metadata || {
               totalDocuments: 0,
               documentsPerCategory: { company: 0, industry: 0, financial: 0, news: 0 },

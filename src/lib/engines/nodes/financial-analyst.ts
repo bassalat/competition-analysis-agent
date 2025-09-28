@@ -4,15 +4,13 @@
  */
 
 import { BaseResearcher, UpdateCallback } from './base-researcher';
-import { ResearchState, RESEARCH_PROMPTS } from '@/types/research';
+import { ResearchState, DocumentData, RESEARCH_PROMPTS } from '@/types/research';
 
 export class FinancialAnalyst extends BaseResearcher {
   async analyze(
     state: ResearchState,
     onUpdate?: UpdateCallback
-  ): Promise<{ message: string; financial_data: Record<string, any>; analyst_type: string; queries: string[] }> {
-    const company = state.company;
-    const industry = state.industry;
+  ): Promise<{ message: string; financial_data: Record<string, DocumentData>; analyst_type: string; queries: string[] }> {
 
     // Update current step
     state.currentStep = 'financial_analyst';
@@ -28,10 +26,6 @@ export class FinancialAnalyst extends BaseResearcher {
 
       const queries = await this.generateQueries(state, RESEARCH_PROMPTS.FINANCIAL);
 
-      // Send subqueries update (matching repo format)
-      const subqueriesMsg = "🔍 Subqueries for financial analysis:\n" +
-        queries.map(query => `• ${query}`).join('\n');
-
       await this.sendUpdate(
         state,
         'Financial analysis queries generated',
@@ -44,7 +38,7 @@ export class FinancialAnalyst extends BaseResearcher {
       );
 
       // Process site scrape data
-      let financial_data: Record<string, any> = {};
+      let financial_data: Record<string, DocumentData> = {};
 
       // Include site_scrape data for financial analysis (following repo pattern)
       if (state.site_scrape) {

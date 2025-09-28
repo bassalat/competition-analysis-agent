@@ -4,7 +4,7 @@
  */
 
 import { BaseResearcher, UpdateCallback } from './base-researcher';
-import { ResearchState } from '@/types/research';
+import { ResearchState, DocumentData } from '@/types/research';
 import { config } from '@/lib/config';
 
 export class Enricher extends BaseResearcher {
@@ -44,7 +44,7 @@ export class Enricher extends BaseResearcher {
             onUpdate
           );
 
-          await this.enrichCategory(state, category.name, category.data, onUpdate);
+          await this.enrichCategory(state, category.name, category.data);
           enrichedCategories.push(category.name);
 
           console.log(`✅ Enriched ${category.name} category with ${Object.keys(category.data).length} documents`);
@@ -63,7 +63,7 @@ export class Enricher extends BaseResearcher {
         onUpdate
       );
 
-      await this.addCrossCategoryInsights(state, onUpdate);
+      await this.addCrossCategoryInsights(state);
     }
 
     const msg = [
@@ -95,8 +95,7 @@ export class Enricher extends BaseResearcher {
   private async enrichCategory(
     state: ResearchState,
     categoryName: string,
-    categoryData: Record<string, any>,
-    onUpdate?: UpdateCallback
+    categoryData: Record<string, DocumentData>
   ): Promise<void> {
     const documents = Object.values(categoryData);
     if (documents.length === 0) return;
@@ -118,8 +117,21 @@ export class Enricher extends BaseResearcher {
 
       if (response.success && response.data) {
         // Store enrichment insights in state for later use in briefings
-        const enrichmentKey = `${categoryName}_enrichment`;
-        (state as any)[enrichmentKey] = response.data;
+        // Store enrichment with proper typing
+        switch (categoryName) {
+          case 'company':
+            state.company_enrichment = response.data;
+            break;
+          case 'industry':
+            state.industry_enrichment = response.data;
+            break;
+          case 'financial':
+            state.financial_enrichment = response.data;
+            break;
+          case 'news':
+            state.news_enrichment = response.data;
+            break;
+        }
 
         console.log(`📈 Added enrichment insights for ${categoryName} (${response.data.length} chars)`);
       }
@@ -200,16 +212,15 @@ Keep the analysis concise and factual.`
    * Add insights that connect findings across categories
    */
   private async addCrossCategoryInsights(
-    state: ResearchState,
-    onUpdate?: UpdateCallback
+    state: ResearchState
   ): Promise<void> {
     try {
       const enrichments = [
-        (state as any).company_enrichment,
-        (state as any).industry_enrichment,
-        (state as any).financial_enrichment,
-        (state as any).news_enrichment,
-      ].filter(Boolean);
+        state.company_enrichment,
+        state.industry_enrichment,
+        state.financial_enrichment,
+        state.news_enrichment,
+      ].filter(Boolean) as string[];
 
       if (enrichments.length < 2) return;
 
@@ -232,7 +243,7 @@ Keep the analysis concise (3-4 key points).`;
       });
 
       if (response.success && response.data) {
-        (state as any).cross_category_insights = response.data;
+        state.cross_category_insights = response.data;
         console.log('🔗 Added cross-category insights');
       }
     } catch (error) {

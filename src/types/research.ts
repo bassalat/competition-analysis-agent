@@ -37,6 +37,13 @@ export interface ResearchState {
   financial_briefing?: string;
   news_briefing?: string;
 
+  // Enrichment data
+  company_enrichment?: string;
+  industry_enrichment?: string;
+  financial_enrichment?: string;
+  news_enrichment?: string;
+  cross_category_insights?: string;
+
   // Final report
   report?: string;
 
@@ -54,7 +61,7 @@ export interface ResearchState {
 
   // References for final report
   references?: string[];
-  reference_info?: Record<string, any>;
+  reference_info?: Record<string, ReferenceInfo>;
   reference_titles?: Record<string, string>;
 
   // Site scraping data (if company website is available)
@@ -77,6 +84,28 @@ export interface DocumentData {
   category?: string; // Primary category for this document
 }
 
+// Reference information for citations
+export interface ReferenceInfo {
+  title: string;
+  date?: string;
+  relevance_score?: number;
+}
+
+// Research metadata for results
+export interface ResearchMetadata {
+  totalDocuments: number;
+  documentsPerCategory: {
+    company: number;
+    industry: number;
+    financial: number;
+    news: number;
+  };
+  costEstimate: number;
+  duration: number;
+  queriesGenerated: string[];
+  sourcesUsed: string[];
+}
+
 // Research update for SSE streaming
 export interface ResearchUpdate {
   type: 'status' | 'progress' | 'result' | 'error' | 'query_generated' | 'documents_found' | 'content_scraped' | 'briefing_generated' | 'report_chunk';
@@ -93,9 +122,9 @@ export interface ResearchUpdate {
     totalSteps?: number;
     currentStepIndex?: number;
     report?: string; // Full report data
-    briefings?: any; // Briefings data
-    metadata?: any; // Metadata
-    competitor?: any; // Competitor data
+    briefings?: Record<string, string>; // Briefings data by section
+    metadata?: ResearchMetadata; // Metadata
+    competitor?: Competitor; // Competitor data
   };
   timestamp: string;
 }

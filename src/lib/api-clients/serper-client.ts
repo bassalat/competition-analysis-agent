@@ -15,8 +15,16 @@ export interface SerperSearchResult {
   position: number;
 }
 
+export interface SerperNewsResult {
+  title: string;
+  link: string;
+  snippet: string;
+  date?: string;
+}
+
 export interface SerperResponse {
   organic: SerperSearchResult[];
+  news?: SerperNewsResult[];
   searchParameters: {
     q: string;
     gl: string;
@@ -166,7 +174,7 @@ export class SerperClient {
         return [];
       }
 
-      const results = data.news.map((result: any, index: number) => ({
+      const results = data.news.map((result: SerperNewsResult, index: number) => ({
         title: result.title || 'No title',
         link: result.link || '',
         snippet: result.snippet || 'No snippet available',

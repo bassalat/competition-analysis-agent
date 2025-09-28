@@ -23,6 +23,7 @@ import {
   CompetitorResearchRequest,
   CompetitorResearchResult,
   ResearchStep,
+  ResearchMetadata,
   RESEARCH_PROMPTS,
   RESEARCH_WORKFLOW,
 } from '@/types/research';
@@ -288,14 +289,14 @@ export class CompetitorResearchEngine {
     // Execute research nodes in parallel (like the repository)
     const researchPromises = researchNodes.map(async ({ name, node }) => {
       try {
-        state.currentStep = name as any;
+        state.currentStep = name as ResearchStep;
         await node.run(state, onUpdate);
-        this.addCompletedStep(state, name as any);
+        this.addCompletedStep(state, name as ResearchStep);
 
         if (onUpdate) {
           await onUpdate({
             type: 'progress',
-            step: name as any,
+            step: name as ResearchStep,
             message: `${name} completed`,
             progress: this.calculateProgress(state),
             timestamp: new Date().toISOString(),
@@ -408,7 +409,7 @@ export class CompetitorResearchEngine {
   /**
    * Calculate research metadata
    */
-  private calculateMetadata(state: ResearchState, duration: number): any {
+  private calculateMetadata(state: ResearchState, duration: number): ResearchMetadata {
     const categoryCounts = {
       company: Object.keys(state.company_data || {}).length,
       industry: Object.keys(state.industry_data || {}).length,
