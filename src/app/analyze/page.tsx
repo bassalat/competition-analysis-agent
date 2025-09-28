@@ -5,7 +5,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ChevronRight, ChevronDown, Play, FileText, Users, BarChart3, Loader2, CheckCircle, AlertCircle, Target, TrendingUp, Download } from 'lucide-react';
+import { ChevronRight, Play, FileText, Users, BarChart3, Loader2, CheckCircle, AlertCircle, Target, TrendingUp, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -21,20 +21,15 @@ type AnalysisStep = 'upload' | 'competitors' | 'analyzing' | 'results';
 
 interface CompetitorResult {
   competitor: { name: string; website?: string; description?: string };
-  finalReport?: string;
-  searchQueries?: string[];
-  searchResults?: unknown[];
-  prioritizedUrls?: string[];
-  scrapedContent?: unknown[];
-  metadata: {
-    success: boolean;
-    totalCost: number;
-    timestamp: string;
-    error?: string;
-  };
-  currentStep?: string;
-  stepProgress?: number;
-  isComplete?: boolean;
+  currentStep: string;
+  searchQueries: string[];
+  searchResults: number;
+  urlsFound: number;
+  contentScraped: number;
+  finalReport: string;
+  cost: number;
+  isComplete: boolean;
+  error: string | null;
 }
 
 interface AnalysisState {
@@ -50,8 +45,8 @@ interface AnalysisState {
   processingStage?: string;
   accuracyMode: 'economy' | 'accuracy';
 
-  // New incremental results
-  competitorResults: Map<string, CompetitorResult>;
+  // Simplified analysis results
+  analysisResults: CompetitorResult[];
   summary?: {
     totalCompetitors: number;
     successfulAnalyses: number;
@@ -60,10 +55,6 @@ interface AnalysisState {
     processingTimeSeconds: number;
   };
   isAnalysisComplete: boolean;
-
-  expandedSections: {
-    individualReports: boolean;
-  };
 }
 
 export default function AnalyzePage() {
@@ -73,38 +64,14 @@ export default function AnalyzePage() {
     competitors: [],
     progress: 0,
     accuracyMode: 'economy',
-    competitorResults: new Map(),
+    analysisResults: [],
     isAnalysisComplete: false,
-    expandedSections: {
-      individualReports: true,
-    },
   });
 
   const updateState = (updates: Partial<AnalysisState>) => {
     setState(prev => ({ ...prev, ...updates }));
   };
 
-  const updateCompetitorResult = (competitorName: string, updates: Partial<CompetitorResult>) => {
-    setState(prev => {
-      const newResults = new Map(prev.competitorResults);
-      const existing = newResults.get(competitorName) || {
-        competitor: { name: competitorName },
-        metadata: { success: false, totalCost: 0, timestamp: new Date().toISOString() }
-      };
-      newResults.set(competitorName, { ...existing, ...updates });
-      return { ...prev, competitorResults: newResults };
-    });
-  };
-
-  const toggleSection = (section: keyof typeof state.expandedSections) => {
-    setState(prev => ({
-      ...prev,
-      expandedSections: {
-        ...prev.expandedSections,
-        [section]: !prev.expandedSections[section]
-      }
-    }));
-  };
 
   // Process documents to extract business context and competitors
   const processDocuments = async (files: File[]) => {
@@ -204,7 +171,7 @@ export default function AnalyzePage() {
       progress: 0,
       currentStage: 'Preparing analysis...',
       error: undefined,
-      competitorResults: new Map(),
+      analysisResults: [],
       isAnalysisComplete: false,
     });
 
@@ -255,7 +222,23 @@ export default function AnalyzePage() {
             if (line.startsWith('data: ')) {
               try {
                 const data = JSON.parse(line.slice(6));
-                handleStreamEvent(data);
+
+                // Simple single event handler
+                if (data.type === 'update') {
+                  updateState({
+                    progress: data.progress || 0,
+                    currentStage: data.message || 'Processing...',
+                    analysisResults: data.results || [],
+                    summary: data.summary,
+                    isAnalysisComplete: data.isComplete || false,
+                    error: data.error,
+                  });
+
+                  // Move to results when complete
+                  if (data.isComplete) {
+                    updateState({ step: 'results' });
+                  }
+                }
               } catch (parseError) {
                 console.warn('Failed to parse SSE data:', parseError);
               }
@@ -279,138 +262,6 @@ export default function AnalyzePage() {
     }
   };
 
-  const handleStreamEvent = (data: Record<string, unknown>) => {
-    console.log('📡 Received SSE event:', data.type, data);
-
-    switch (data.type) {
-      case 'progress':
-        updateState({
-          progress: typeof data.progress === 'number' ? data.progress : 0,
-          currentStage: typeof data.message === 'string' ? data.message : 'Processing...'
-        });
-        break;
-
-      case 'step_progress':
-        // Update progress for a specific competitor and step
-        updateState({
-          progress: typeof data.progress === 'number' ? data.progress : 0,
-          currentStage: typeof data.message === 'string' ? data.message : 'Processing...'
-        });
-
-        if (typeof data.competitor === 'string') {
-          updateCompetitorResult(data.competitor, {
-            currentStep: typeof data.step === 'string' ? data.step : 'Processing',
-            stepProgress: typeof data.stepProgress === 'number' ? data.stepProgress : 0
-          });
-        }
-        break;
-
-      case 'incremental_result':
-        // Handle incremental data for each step
-        if (typeof data.competitor === 'string' && typeof data.detailType === 'string' && data.data) {
-          const updates: Partial<CompetitorResult> = {};
-
-          switch (data.detailType) {
-            case 'queries_generated':
-              updates.searchQueries = (data.data && typeof data.data === 'object' && 'queries' in data.data && Array.isArray(data.data.queries))
-                ? data.data.queries.map((q: unknown) => (typeof q === 'object' && q && 'query' in q && typeof q.query === 'string') ? q.query : '')
-                : [];
-              break;
-            case 'search_results':
-              updates.searchResults = (data.data && typeof data.data === 'object' && 'results' in data.data && Array.isArray(data.data.results))
-                ? data.data.results
-                : [];
-              break;
-            case 'urls_prioritized':
-              updates.prioritizedUrls = (data.data && typeof data.data === 'object' && 'urls' in data.data && Array.isArray(data.data.urls))
-                ? data.data.urls
-                : [];
-              break;
-            case 'content_scraped':
-              updates.scrapedContent = (data.data && typeof data.data === 'object' && 'content' in data.data && Array.isArray(data.data.content))
-                ? data.data.content
-                : [];
-              break;
-          }
-
-          updateCompetitorResult(data.competitor, updates);
-        }
-        break;
-
-      case 'competitor_complete':
-        // Mark competitor as complete and add final report
-        if (typeof data.competitor === 'string' && data.result && typeof data.result === 'object') {
-          const result = data.result as {
-            finalReport?: string;
-            searchQueries?: string[];
-            searchResults?: unknown[];
-            prioritizedUrls?: string[];
-            scrapedContent?: unknown[];
-            metadata?: {
-              success: boolean;
-              totalCost: number;
-              timestamp: string;
-              error?: string;
-            };
-          };
-          updateCompetitorResult(data.competitor, {
-            finalReport: typeof result.finalReport === 'string' ? result.finalReport : '',
-            searchQueries: Array.isArray(result.searchQueries) ? result.searchQueries : [],
-            searchResults: Array.isArray(result.searchResults) ? result.searchResults : [],
-            prioritizedUrls: Array.isArray(result.prioritizedUrls) ? result.prioritizedUrls : [],
-            scrapedContent: Array.isArray(result.scrapedContent) ? result.scrapedContent : [],
-            metadata: result.metadata || { success: false, totalCost: 0, timestamp: new Date().toISOString() },
-            isComplete: true,
-            currentStep: 'Complete'
-          });
-        }
-        break;
-
-      case 'complete':
-        // Final completion with summary
-        console.log('✅ Analysis completed!', data);
-        updateState({
-          step: 'results',
-          progress: 100,
-          currentStage: 'Analysis complete!',
-          isAnalysisComplete: true,
-          summary: (data.data && typeof data.data === 'object' && 'summary' in data.data) ? data.data.summary as {
-            totalCompetitors: number;
-            successfulAnalyses: number;
-            totalCost: number;
-            avgCostPerCompetitor: number;
-            processingTimeSeconds: number;
-          } : undefined
-        });
-        break;
-
-      case 'error':
-        console.error('❌ Analysis error:', data.message);
-        updateState({
-          error: typeof data.message === 'string' ? data.message : 'Analysis failed',
-          currentStage: 'Analysis failed'
-        });
-        break;
-
-      case 'competitor_error':
-        if (typeof data.competitor === 'string') {
-          updateCompetitorResult(data.competitor, {
-            metadata: {
-              success: false,
-              totalCost: 0,
-              timestamp: new Date().toISOString(),
-              error: typeof data.error === 'string' ? data.error : 'Unknown error'
-            },
-            isComplete: true,
-            currentStep: 'Failed'
-          });
-        }
-        break;
-
-      default:
-        console.log('Unhandled SSE event type:', data.type);
-    }
-  };
 
   const resetAnalysis = () => {
     updateState({
@@ -418,7 +269,7 @@ export default function AnalyzePage() {
       progress: 0,
       currentStage: undefined,
       error: undefined,
-      competitorResults: new Map(),
+      analysisResults: [],
       isAnalysisComplete: false,
       summary: undefined,
     });
@@ -590,49 +441,50 @@ export default function AnalyzePage() {
         {state.step === 'analyzing' && (
           <div className="space-y-6">
             {/* Live Competitor Results */}
-            {Array.from(state.competitorResults.entries()).map(([name, result]) => (
-              <Card key={name} className="bg-slate-800/50 border-slate-700">
+            {state.analysisResults.map((result, index) => (
+              <Card key={index} className="bg-slate-800/50 border-slate-700">
                 <CardHeader>
                   <CardTitle className="text-white flex items-center gap-2">
                     <Target className="h-5 w-5 text-purple-400" />
-                    {name}
+                    {result.competitor.name}
                     {result.isComplete ? (
-                      <CheckCircle className="h-5 w-5 text-green-400 ml-auto" />
+                      result.error ? (
+                        <AlertCircle className="h-5 w-5 text-red-400 ml-auto" />
+                      ) : (
+                        <CheckCircle className="h-5 w-5 text-green-400 ml-auto" />
+                      )
                     ) : (
                       <Loader2 className="h-5 w-5 text-blue-400 ml-auto animate-spin" />
                     )}
                   </CardTitle>
-                  {result.currentStep && (
-                    <p className="text-sm text-slate-400">
-                      Current step: {result.currentStep}
-                      {result.stepProgress && ` (${result.stepProgress}%)`}
-                    </p>
-                  )}
+                  <p className="text-sm text-slate-400">
+                    Current step: {result.currentStep}
+                  </p>
                 </CardHeader>
                 <CardContent>
                   <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                     <div className="bg-slate-700/50 p-3 rounded-lg">
                       <h4 className="text-xs font-medium text-slate-400 mb-1">Search Queries</h4>
                       <p className="text-lg font-bold text-white">
-                        {result.searchQueries?.length || 0}
+                        {result.searchQueries.length}
                       </p>
                     </div>
                     <div className="bg-slate-700/50 p-3 rounded-lg">
                       <h4 className="text-xs font-medium text-slate-400 mb-1">Search Results</h4>
                       <p className="text-lg font-bold text-white">
-                        {result.searchResults?.length || 0}
+                        {result.searchResults}
                       </p>
                     </div>
                     <div className="bg-slate-700/50 p-3 rounded-lg">
                       <h4 className="text-xs font-medium text-slate-400 mb-1">URLs Found</h4>
                       <p className="text-lg font-bold text-white">
-                        {result.prioritizedUrls?.length || 0}
+                        {result.urlsFound}
                       </p>
                     </div>
                     <div className="bg-slate-700/50 p-3 rounded-lg">
                       <h4 className="text-xs font-medium text-slate-400 mb-1">Content Scraped</h4>
                       <p className="text-lg font-bold text-white">
-                        {result.scrapedContent?.length || 0}
+                        {result.contentScraped}
                       </p>
                     </div>
                   </div>
@@ -644,6 +496,12 @@ export default function AnalyzePage() {
                         {result.finalReport.substring(0, 500)}
                         {result.finalReport.length > 500 && '...'}
                       </div>
+                    </div>
+                  )}
+
+                  {result.error && (
+                    <div className="bg-red-900/20 p-4 rounded-lg mt-4">
+                      <p className="text-red-300 text-sm">{result.error}</p>
                     </div>
                   )}
                 </CardContent>
@@ -690,59 +548,50 @@ export default function AnalyzePage() {
             {/* Individual Results */}
             <Card className="bg-slate-800/50 border-slate-700">
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-white flex items-center gap-2">
-                    <TrendingUp className="h-5 w-5 text-purple-400" />
-                    Competitor Analysis Results
-                  </CardTitle>
-                  <Button
-                    onClick={() => toggleSection('individualReports')}
-                    variant="ghost"
-                    className="text-slate-400 hover:text-white"
-                  >
-                    {state.expandedSections.individualReports ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                  </Button>
-                </div>
+                <CardTitle className="text-white flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-purple-400" />
+                  Competitor Analysis Results
+                </CardTitle>
               </CardHeader>
-              {state.expandedSections.individualReports && (
-                <CardContent>
-                  <div className="space-y-6">
-                    {Array.from(state.competitorResults.entries()).map(([name, result]) => (
-                      <div key={name} className="border border-slate-600 rounded-lg p-4">
-                        <div className="flex items-center justify-between mb-4">
-                          <h3 className="text-lg font-semibold text-white">{name}</h3>
-                          <div className="flex items-center gap-2">
-                            {result.metadata.success ? (
-                              <>
-                                <Badge className="bg-green-900 text-green-300">Success</Badge>
-                                <span className="text-sm text-slate-400">${result.metadata.totalCost.toFixed(4)}</span>
-                              </>
-                            ) : (
-                              <Badge className="bg-red-900 text-red-300">Failed</Badge>
-                            )}
-                          </div>
+              <CardContent>
+                <div className="space-y-6">
+                  {state.analysisResults.map((result, index) => (
+                    <div key={index} className="border border-slate-600 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-semibold text-white">{result.competitor.name}</h3>
+                        <div className="flex items-center gap-2">
+                          {result.isComplete && !result.error ? (
+                            <>
+                              <Badge className="bg-green-900 text-green-300">Success</Badge>
+                              <span className="text-sm text-slate-400">${result.cost.toFixed(4)}</span>
+                            </>
+                          ) : result.error ? (
+                            <Badge className="bg-red-900 text-red-300">Failed</Badge>
+                          ) : (
+                            <Badge className="bg-blue-900 text-blue-300">In Progress</Badge>
+                          )}
                         </div>
+                      </div>
 
-                        {result.finalReport && (
-                          <div className="bg-slate-700/30 p-4 rounded-lg">
-                            <div className="prose prose-invert max-w-none">
-                              <div className="whitespace-pre-wrap text-sm text-slate-300">
-                                {result.finalReport}
-                              </div>
+                      {result.finalReport && (
+                        <div className="bg-slate-700/30 p-4 rounded-lg">
+                          <div className="prose prose-invert max-w-none">
+                            <div className="whitespace-pre-wrap text-sm text-slate-300">
+                              {result.finalReport}
                             </div>
                           </div>
-                        )}
+                        </div>
+                      )}
 
-                        {result.metadata.error && (
-                          <div className="bg-red-900/20 p-4 rounded-lg mt-4">
-                            <p className="text-red-300 text-sm">{result.metadata.error}</p>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              )}
+                      {result.error && (
+                        <div className="bg-red-900/20 p-4 rounded-lg mt-4">
+                          <p className="text-red-300 text-sm">{result.error}</p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
             </Card>
 
             {/* Action Buttons */}

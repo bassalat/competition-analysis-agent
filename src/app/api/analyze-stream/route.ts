@@ -183,126 +183,151 @@ export async function POST(request: NextRequest) {
           });
         });
 
-        // Perform simplified analysis with incremental streaming
+        // Simplified analysis with single update events
         (async () => {
           try {
             const engine = getSimplifiedCompetitorEngine();
-            const results = [];
             const startTime = Date.now();
 
-            sendData({
-              type: 'progress',
+            // Simple state to track everything
+            const analysisState = {
               progress: 5,
               message: `Starting analysis for ${competitors.length} competitors`,
-              timestamp: new Date().toISOString()
-            });
+              currentCompetitor: '',
+              results: [] as Array<{
+                competitor: { name: string; website?: string; description?: string };
+                currentStep: string;
+                searchQueries: string[];
+                searchResults: number;
+                urlsFound: number;
+                contentScraped: number;
+                finalReport: string;
+                cost: number;
+                isComplete: boolean;
+                error: string | null;
+              }>,
+              summary: null as {
+                totalCompetitors: number;
+                successfulAnalyses: number;
+                totalCost: number;
+                avgCostPerCompetitor: number;
+                processingTimeSeconds: number;
+              } | null,
+              isComplete: false
+            };
+
+            // Helper to send current state
+            const sendUpdate = () => {
+              sendData({
+                type: 'update',
+                ...analysisState,
+                timestamp: new Date().toISOString()
+              });
+            };
+
+            sendUpdate();
 
             for (let i = 0; i < competitors.length; i++) {
               const competitor = competitors[i];
               const competitorProgress = 10 + (i / competitors.length) * 80;
 
-              sendData({
-                type: 'progress',
-                progress: competitorProgress,
-                message: `Analyzing ${competitor.name} (${i + 1}/${competitors.length})`,
-                timestamp: new Date().toISOString()
-              });
+              // Update current state
+              analysisState.progress = competitorProgress;
+              analysisState.message = `Analyzing ${competitor.name} (${i + 1}/${competitors.length})`;
+              analysisState.currentCompetitor = competitor.name;
+              sendUpdate();
+
+              // Initialize competitor data
+              const competitorData = {
+                competitor,
+                currentStep: 'Starting...',
+                searchQueries: [] as string[],
+                searchResults: 0,
+                urlsFound: 0,
+                contentScraped: 0,
+                finalReport: '',
+                cost: 0,
+                isComplete: false,
+                error: null as string | null
+              };
+
+              analysisState.results.push(competitorData);
 
               try {
                 const result = await engine.analyzeCompetitor(
                   competitor,
                   undefined,
-                  // Progress callback - sends step updates
+                  // Progress callback - update current step
                   (step, stepProgress) => {
                     const overallProgress = competitorProgress + (stepProgress / 100) * (80 / competitors.length);
-                    sendData({
-                      type: 'step_progress',
-                      progress: Math.round(overallProgress),
-                      message: `[${competitor.name}] ${step}`,
-                      timestamp: new Date().toISOString(),
-                      competitor: competitor.name,
-                      step: step,
-                      stepProgress
-                    });
+                    analysisState.progress = Math.round(overallProgress);
+                    analysisState.message = `${competitor.name}: ${step}`;
+
+                    // Update competitor data
+                    competitorData.currentStep = step;
+
+                    sendUpdate();
                   },
-                  // Detail callback - sends incremental analysis data
+                  // Detail callback - update specific data
                   (detailType, detailData) => {
-                    sendData({
-                      type: 'incremental_result',
-                      detailType,
-                      data: detailData,
-                      competitor: competitor.name,
-                      timestamp: new Date().toISOString()
-                    });
+                    switch (detailType) {
+                      case 'queries_generated':
+                        competitorData.searchQueries = (detailData as { queries?: string[] })?.queries || [];
+                        break;
+                      case 'search_results':
+                        competitorData.searchResults = (detailData as { results?: unknown[] })?.results?.length || 0;
+                        break;
+                      case 'urls_prioritized':
+                        competitorData.urlsFound = (detailData as { urls?: string[] })?.urls?.length || 0;
+                        break;
+                      case 'content_scraped':
+                        competitorData.contentScraped = (detailData as { content?: unknown[] })?.content?.length || 0;
+                        break;
+                    }
+                    sendUpdate();
                   }
                 );
 
-                results.push(result);
+                // Mark as complete and add final data
+                competitorData.finalReport = result.finalReport || '';
+                competitorData.cost = result.metadata.totalCost;
+                competitorData.isComplete = true;
+                competitorData.currentStep = 'Complete';
 
-                // Send complete competitor analysis immediately
-                sendData({
-                  type: 'competitor_complete',
-                  competitor: competitor.name,
-                  result,
-                  cost: result.metadata.totalCost,
-                  timestamp: new Date().toISOString()
-                });
+                sendUpdate();
 
               } catch (error) {
                 console.error(`Analysis failed for ${competitor.name}:`, error);
 
-                const failedResult = {
-                  competitor,
-                  searchQueries: [],
-                  searchResults: [],
-                  prioritizedUrls: [],
-                  scrapedContent: [],
-                  finalReport: `# ${competitor.name} - Analysis Failed\n\nAnalysis failed due to error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-                  metadata: {
-                    totalCost: 0,
-                    timestamp: new Date().toISOString(),
-                    success: false,
-                    error: error instanceof Error ? error.message : 'Unknown error'
-                  }
-                };
+                competitorData.error = error instanceof Error ? error.message : 'Unknown error';
+                competitorData.isComplete = true;
+                competitorData.currentStep = 'Failed';
+                competitorData.finalReport = `Analysis failed: ${competitorData.error}`;
 
-                results.push(failedResult);
-
-                sendData({
-                  type: 'competitor_error',
-                  competitor: competitor.name,
-                  error: error instanceof Error ? error.message : 'Unknown error',
-                  timestamp: new Date().toISOString()
-                });
+                sendUpdate();
               }
             }
 
+            // Calculate final summary
             const endTime = Date.now();
             const processingTime = Math.round((endTime - startTime) / 1000);
             const totalCost = globalCostTracker.getSessionCosts().totalCost;
             const avgCostPerCompetitor = totalCost / competitors.length;
-            const successfulAnalyses = results.filter(r => r.metadata.success).length;
+            const successfulAnalyses = analysisState.results.filter(r => r.isComplete && !r.error).length;
 
-            const summary = {
+            analysisState.summary = {
               totalCompetitors: competitors.length,
               successfulAnalyses,
               totalCost,
               avgCostPerCompetitor,
-              costTargetMet: avgCostPerCompetitor <= 0.20,
               processingTimeSeconds: processingTime
             };
 
-            // Send final completion with all data
-            sendData({
-              type: 'complete',
-              progress: 100,
-              data: {
-                competitors: results,
-                summary
-              },
-              message: `Analysis completed! ${successfulAnalyses}/${competitors.length} successful. Avg cost: $${avgCostPerCompetitor.toFixed(4)}/competitor`,
-              timestamp: new Date().toISOString()
-            });
+            analysisState.progress = 100;
+            analysisState.message = `Analysis completed! ${successfulAnalyses}/${competitors.length} successful`;
+            analysisState.isComplete = true;
+
+            sendUpdate();
 
             clearTimeout(timeoutId);
             unsubscribeCosts();
@@ -321,8 +346,14 @@ export async function POST(request: NextRequest) {
 
             if (!isClosed) {
               sendData({
-                type: 'error',
+                type: 'update',
+                progress: 0,
                 message: error instanceof Error ? error.message : 'Analysis failed',
+                currentCompetitor: '',
+                results: [],
+                summary: null,
+                isComplete: false,
+                error: error instanceof Error ? error.message : 'Analysis failed',
                 timestamp: new Date().toISOString()
               });
 
