@@ -1,11 +1,12 @@
 /**
- * Enhanced Streaming Analysis API Endpoint with Redis Queue Integration
+ * Simplified Streaming Analysis API Endpoint
  *
- * Now supports both legacy SSE streaming and modern Redis queue-based processing:
- * - Legacy mode: Direct SSE streaming (for backwards compatibility)
- * - Queue mode: Redis job queue with polling (recommended for production)
- *
- * Provides real-time updates for the 5-step competitive intelligence workflow
+ * Provides real-time incremental updates for the 5-step competitive intelligence workflow:
+ * 1. Generate search queries → Send queries to UI immediately
+ * 2. Execute searches → Send results to UI immediately
+ * 3. Prioritize URLs → Send URLs to UI immediately
+ * 4. Scrape content → Send content to UI immediately
+ * 5. Synthesize report → Send final report to UI immediately
  */
 
 import { NextRequest } from 'next/server';
@@ -14,33 +15,17 @@ import { validateConfig } from '@/lib/config';
 import { globalCostTracker } from '@/lib/cost-tracker';
 import { getClaudeClient } from '@/lib/api-clients/claude-client';
 import { getSerperClient } from '@/lib/api-clients/serper-client';
-import { addAnalysisJob } from '@/lib/queues/analysis-queue';
-import { cacheClient } from '@/lib/cache/api-cache';
 
 // Maximum number of competitors to analyze
 const MAX_COMPETITORS = 50;
 
-// Request timeout (30 minutes for streaming analysis)
-const REQUEST_TIMEOUT = 30 * 60 * 1000;
-
-// Type definition for controller errors
-interface ControllerError extends Error {
-  code?: string;
-}
-
-// Type guard to safely check if error is a controller error
-const isControllerError = (error: unknown): error is ControllerError => {
-  return error instanceof Error;
-};
+// Request timeout (20 minutes for streaming analysis)
+const REQUEST_TIMEOUT = 20 * 60 * 1000;
 
 export async function POST(request: NextRequest) {
-  console.log('Starting enhanced competitive intelligence analysis...');
+  console.log('Starting simplified competitive intelligence analysis...');
 
   try {
-    // Check for queue mode parameter
-    const url = new URL(request.url);
-    const useQueue = url.searchParams.get('queue') === 'true';
-
     // Validate configuration
     validateConfig();
 
@@ -56,7 +41,8 @@ export async function POST(request: NextRequest) {
       console.error('Claude API health check failed:', claudeHealth.error);
       return new Response(
         `data: ${JSON.stringify({
-          error: `Claude API not available: ${claudeHealth.error}. Please check your ANTHROPIC_API_KEY.`
+          type: 'error',
+          message: `Claude API not available: ${claudeHealth.error}. Please check your ANTHROPIC_API_KEY.`
         })}\n\n`,
         {
           status: 503,
@@ -76,7 +62,8 @@ export async function POST(request: NextRequest) {
         console.warn('Serper API health check failed:', serperHealth.error);
         return new Response(
           `data: ${JSON.stringify({
-            error: `Serper API not available: ${serperHealth.error}. Please check your SERPER_API_KEY.`
+            type: 'error',
+            message: `Serper API not available: ${serperHealth.error}. Please check your SERPER_API_KEY.`
           })}\n\n`,
           {
             status: 503,
@@ -92,7 +79,8 @@ export async function POST(request: NextRequest) {
       console.warn('Serper API health check failed:', serperError);
       return new Response(
         `data: ${JSON.stringify({
-          error: `Serper API connection failed. Please check your SERPER_API_KEY.`
+          type: 'error',
+          message: `Serper API connection failed. Please check your SERPER_API_KEY.`
         })}\n\n`,
         {
           status: 503,
@@ -131,12 +119,13 @@ export async function POST(request: NextRequest) {
     if (competitors.length === 0) {
       return new Response(
         `data: ${JSON.stringify({
-          error: 'No competitors provided. Please add competitors for analysis.'
+          type: 'error',
+          message: 'No competitors provided. Please add competitors for analysis.'
         })}\n\n`,
         {
           status: 400,
           headers: {
-            'Content-Type': 'text/plain',
+            'Content-Type': 'text/event-stream',
             'Cache-Control': 'no-cache',
             'Connection': 'keep-alive',
           },
@@ -144,21 +133,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`🚀 Analysis started for ${competitors.length} competitors (Mode: ${useQueue ? 'Queue' : 'SSE'})`);
+    console.log(`🚀 Analysis started for ${competitors.length} competitors`);
 
-    // If queue mode is enabled, use Redis job queue
-    if (useQueue) {
-      return await handleQueueMode(competitors, formData);
-    }
-
-    // Legacy SSE streaming mode (for backwards compatibility)
     // Create response stream
     const stream = new ReadableStream({
       start(controller) {
         let isClosed = false;
         const encoder = new TextEncoder();
 
-        // Helper to send SSE data safely with proper encoding
+        // Helper to send SSE data safely
         const sendData = (data: Record<string, unknown>) => {
           if (isClosed) {
             console.warn('Attempted to send data but connection is closed:', data.type);
@@ -167,51 +150,19 @@ export async function POST(request: NextRequest) {
           try {
             const message = `data: ${JSON.stringify(data)}\n\n`;
             controller.enqueue(encoder.encode(message));
-            console.log('Successfully sent SSE data:', data.type, data.progress || 'no-progress');
+            console.log('✓ Sent SSE data:', data.type);
           } catch (error) {
-            console.error('Failed to send data:', error, 'Data type:', data.type);
-            // Mark as closed if controller errors occur
-            if (isControllerError(error) && (error.code === 'ERR_INVALID_STATE' || error.message?.includes('Controller is already closed'))) {
-              isClosed = true;
-            } else {
-              isClosed = true;
-            }
+            console.error('Failed to send data:', error);
+            isClosed = true;
           }
         };
-
-        // Helper to send keep-alive/flush messages for Railway proxy handling
-        const sendKeepAlive = () => {
-          if (isClosed) return;
-          try {
-            // Send a comment (keeps connection alive but invisible to client)
-            const keepAlive = ": keep-alive\n\n";
-            controller.enqueue(encoder.encode(keepAlive));
-          } catch (error) {
-            console.warn('Failed to send keep-alive:', error);
-            // Mark as closed if controller errors occur
-            if (isControllerError(error) && (error.code === 'ERR_INVALID_STATE' || error.message?.includes('Controller is already closed'))) {
-              isClosed = true;
-            }
-          }
-        };
-
-        // Set up periodic keep-alive messages to prevent proxy buffering
-        const keepAliveInterval = setInterval(() => {
-          if (isClosed) {
-            clearInterval(keepAliveInterval);
-            return;
-          }
-          sendKeepAlive();
-        }, 2000); // Every 2 seconds
 
         // Set up timeout for the analysis
         const timeoutId = setTimeout(() => {
           if (!isClosed) {
-            clearInterval(keepAliveInterval);
             sendData({
-              type: 'timeout',
+              type: 'error',
               message: 'Analysis timeout - process taking too long',
-              progress: -1,
               timestamp: new Date().toISOString()
             });
             controller.close();
@@ -232,7 +183,7 @@ export async function POST(request: NextRequest) {
           });
         });
 
-        // Perform simplified analysis with streaming
+        // Perform simplified analysis with incremental streaming
         (async () => {
           try {
             const engine = getSimplifiedCompetitorEngine();
@@ -261,10 +212,11 @@ export async function POST(request: NextRequest) {
                 const result = await engine.analyzeCompetitor(
                   competitor,
                   undefined,
+                  // Progress callback - sends step updates
                   (step, stepProgress) => {
                     const overallProgress = competitorProgress + (stepProgress / 100) * (80 / competitors.length);
                     sendData({
-                      type: 'progress',
+                      type: 'step_progress',
                       progress: Math.round(overallProgress),
                       message: `[${competitor.name}] ${step}`,
                       timestamp: new Date().toISOString(),
@@ -273,10 +225,10 @@ export async function POST(request: NextRequest) {
                       stepProgress
                     });
                   },
+                  // Detail callback - sends incremental analysis data
                   (detailType, detailData) => {
-                    // Stream detailed analysis data
                     sendData({
-                      type: 'analysis_detail',
+                      type: 'incremental_result',
                       detailType,
                       data: detailData,
                       competitor: competitor.name,
@@ -287,12 +239,12 @@ export async function POST(request: NextRequest) {
 
                 results.push(result);
 
+                // Send complete competitor analysis immediately
                 sendData({
                   type: 'competitor_complete',
                   competitor: competitor.name,
                   result,
                   cost: result.metadata.totalCost,
-                  progress: Math.round(competitorProgress + (80 / competitors.length)),
                   timestamp: new Date().toISOString()
                 });
 
@@ -320,7 +272,6 @@ export async function POST(request: NextRequest) {
                   type: 'competitor_error',
                   competitor: competitor.name,
                   error: error instanceof Error ? error.message : 'Unknown error',
-                  progress: Math.round(competitorProgress + (80 / competitors.length)),
                   timestamp: new Date().toISOString()
                 });
               }
@@ -332,224 +283,53 @@ export async function POST(request: NextRequest) {
             const avgCostPerCompetitor = totalCost / competitors.length;
             const successfulAnalyses = results.filter(r => r.metadata.success).length;
 
+            const summary = {
+              totalCompetitors: competitors.length,
+              successfulAnalyses,
+              totalCost,
+              avgCostPerCompetitor,
+              costTargetMet: avgCostPerCompetitor <= 0.20,
+              processingTimeSeconds: processingTime
+            };
+
+            // Send final completion with all data
             sendData({
-              type: 'progress',
-              progress: 95,
-              message: 'Finalizing results...',
+              type: 'complete',
+              progress: 100,
+              data: {
+                competitors: results,
+                summary
+              },
+              message: `Analysis completed! ${successfulAnalyses}/${competitors.length} successful. Avg cost: $${avgCostPerCompetitor.toFixed(4)}/competitor`,
               timestamp: new Date().toISOString()
             });
 
-            const finalData = {
-              competitors: results,
-              summary: {
-                totalCompetitors: competitors.length,
-                successfulAnalyses,
-                totalCost,
-                avgCostPerCompetitor,
-                costTargetMet: avgCostPerCompetitor <= 0.20,
-                processingTimeSeconds: processingTime
-              }
-            };
-
             clearTimeout(timeoutId);
+            unsubscribeCosts();
 
-            if (!isClosed) {
-              // Step 1: Send pre-completion signal to prepare frontend
-              sendData({
-                type: 'progress',
-                progress: 99,
-                message: 'Analysis complete, preparing final report...',
-                timestamp: new Date().toISOString()
-              });
-              sendKeepAlive(); // Force a flush
-
-              // Step 2: Send completion metadata first (smaller payload)
-              setTimeout(() => {
-                if (!isClosed) {
-                  sendData({
-                    type: 'completion_metadata',
-                    message: `Analysis completed! ${successfulAnalyses}/${competitors.length} successful. Avg cost: $${avgCostPerCompetitor.toFixed(4)}/competitor`,
-                    summary: finalData.summary,
-                    timestamp: new Date().toISOString()
-                  });
-                  sendKeepAlive();
-                }
-              }, 200);
-
-              // Step 3: Send the complete data in chunks to avoid buffering
-              setTimeout(() => {
-                if (!isClosed) {
-                  // Break finalData into smaller chunks if it's large
-                  const dataSize = JSON.stringify(finalData).length;
-                  console.log(`Final data size: ${dataSize} bytes, competitors: ${competitors.length}, chunking: ${dataSize > 50000}`);
-                  if (dataSize > 50000) { // If larger than 50KB
-                    // Send competitors data in smaller batches
-                    const competitors = finalData.competitors || [];
-
-                    // Special case for single competitor - ensure data delivery
-                    if (competitors.length === 1) {
-                      console.log('Single competitor with large data, using direct delivery in complete event');
-                      // Send complete event with full data immediately (no chunking needed for single competitor)
-                      sendData({
-                        type: 'complete',
-                        progress: 100,
-                        chunked: false, // Mark as non-chunked since we're delivering directly
-                        data: {
-                          competitors: finalData.competitors,
-                          summary: finalData.summary
-                        },
-                        message: `Analysis completed! ${successfulAnalyses}/${competitors.length} successful. Avg cost: $${avgCostPerCompetitor.toFixed(4)}/competitor`,
-                        timestamp: new Date().toISOString()
-                      });
-                      sendKeepAlive(); // Force immediate flush
-
-                      // Send completion verification signal with aggressive flushing
-                      setTimeout(() => {
-                        if (!isClosed) {
-                          sendData({
-                            type: 'completion_verified',
-                            progress: 100,
-                            message: 'Analysis completed successfully',
-                            timestamp: new Date().toISOString()
-                          });
-                          sendKeepAlive();
-                          // Multiple flush attempts for Railway proxy
-                          setTimeout(() => sendKeepAlive(), 100);
-                          setTimeout(() => sendKeepAlive(), 300);
-                          setTimeout(() => sendKeepAlive(), 500);
-                        }
-                      }, 200);
-                      return; // Exit early to avoid normal chunked logic
-                    }
-
-                    const batchSize = Math.max(1, Math.floor(competitors.length / 3));
-
-                    for (let i = 0; i < competitors.length; i += batchSize) {
-                      const batch = competitors.slice(i, i + batchSize);
-                      setTimeout(() => {
-                        if (!isClosed) {
-                          sendData({
-                            type: 'data_chunk',
-                            chunkIndex: Math.floor(i / batchSize),
-                            totalChunks: Math.ceil(competitors.length / batchSize),
-                            data: { competitors: batch },
-                            timestamp: new Date().toISOString()
-                          });
-                          sendKeepAlive();
-                        }
-                      }, i * 100); // Stagger chunks by 100ms
-                    }
-
-                    // Send final completion after all chunks - INCLUDE SUMMARY DATA
-                    setTimeout(() => {
-                      if (!isClosed) {
-                        sendData({
-                          type: 'complete',
-                          progress: 100,
-                          chunked: true,
-                          // CRITICAL FIX: Include summary data for chunked delivery
-                          data: {
-                            competitors: [], // Competitors already sent in chunks
-                            summary: finalData.summary // Ensure summary is available for frontend
-                          },
-                          message: `Analysis completed! ${successfulAnalyses}/${competitors.length} successful. Avg cost: $${avgCostPerCompetitor.toFixed(4)}/competitor`,
-                          timestamp: new Date().toISOString()
-                        });
-                        sendKeepAlive(); // Force immediate flush
-                        // Send completion verification signal
-                        setTimeout(() => {
-                          if (!isClosed) {
-                            sendData({
-                              type: 'completion_verified',
-                              progress: 100,
-                              message: 'Analysis completed successfully',
-                              timestamp: new Date().toISOString()
-                            });
-                            sendKeepAlive();
-                          }
-                        }, 200);
-                      }
-                    }, competitors.length * 100 + 500);
-                  } else {
-                    // Send complete data if it's small enough
-                    console.log('Sending non-chunked completion data with', JSON.stringify(finalData).length, 'characters');
-                    sendData({
-                      type: 'complete',
-                      progress: 100,
-                      data: {
-                        competitors: finalData.competitors,
-                        summary: finalData.summary
-                      }, // Fix data structure to match frontend expectations
-                      message: `Analysis completed! ${successfulAnalyses}/${competitors.length} successful. Avg cost: $${avgCostPerCompetitor.toFixed(4)}/competitor`,
-                      timestamp: new Date().toISOString()
-                    });
-                    sendKeepAlive(); // Ensure data is flushed
-                    // Send completion verification signal
-                    setTimeout(() => {
-                      if (!isClosed) {
-                        sendData({
-                          type: 'completion_verified',
-                          progress: 100,
-                          message: 'Analysis completed successfully',
-                          timestamp: new Date().toISOString()
-                        });
-                        sendKeepAlive();
-                      }
-                    }, 200);
-                  }
-                }
-              }, 500);
-
-              // Step 4: Aggressive cleanup with multiple flush attempts
-              setTimeout(() => {
-                if (!isClosed) {
-                  clearInterval(keepAliveInterval);
-
-                  // Multiple flush attempts with increasing delays
-                  const flushAttempts = [100, 300, 500, 1000];
-                  flushAttempts.forEach((delay, index) => {
-                    setTimeout(() => {
-                      if (!isClosed) {
-                        try {
-                          sendKeepAlive();
-                          if (index === flushAttempts.length - 1) {
-                            // Final cleanup
-                            const endMessage = "event: end\ndata: {}\n\n";
-                            controller.enqueue(encoder.encode(endMessage));
-                            unsubscribeCosts();
-                            controller.close();
-                            isClosed = true;
-                          }
-                        } catch (error) {
-                          console.warn(`Failed flush attempt ${index + 1}:`, error);
-                        }
-                      }
-                    }, delay);
-                  });
-                }
-              }, 1500); // Start flush sequence after 1.5s
-            }
+            // Close the stream
+            setTimeout(() => {
+              if (!isClosed) {
+                controller.close();
+                isClosed = true;
+              }
+            }, 1000);
 
           } catch (error) {
             clearTimeout(timeoutId);
             console.error('Streaming analysis failed:', error);
 
             if (!isClosed) {
-              clearInterval(keepAliveInterval);
               sendData({
                 type: 'error',
                 message: error instanceof Error ? error.message : 'Analysis failed',
-                progress: -1,
                 timestamp: new Date().toISOString()
               });
 
-              // Add delay before closing on error as well
               setTimeout(() => {
-                if (!isClosed) {
-                  unsubscribeCosts();
-                  controller.close();
-                  isClosed = true;
-                }
+                unsubscribeCosts();
+                controller.close();
+                isClosed = true;
               }, 100);
             }
           }
@@ -562,17 +342,6 @@ export async function POST(request: NextRequest) {
         'Content-Type': 'text/event-stream; charset=utf-8',
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Connection': 'keep-alive',
-        'Transfer-Encoding': 'chunked',
-        // Railway/nginx proxy buffering prevention
-        'X-Accel-Buffering': 'no',
-        'X-Proxy-Buffering': 'no',
-        'Proxy-Buffering': 'no',
-        'Buffering': 'no',
-        // Additional Railway-specific headers
-        'X-Content-Type-Options': 'nosniff',
-        'X-Railway-No-Buffer': 'true',
-        'X-Stream-Output': 'true',
-        // CORS headers
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type',
@@ -585,7 +354,6 @@ export async function POST(request: NextRequest) {
     const errorData = {
       type: 'error',
       message: error instanceof Error ? error.message : 'Failed to start analysis',
-      progress: -1,
       timestamp: new Date().toISOString()
     };
 
@@ -603,101 +371,13 @@ export async function POST(request: NextRequest) {
   }
 }
 
-/**
- * Handle queue-based analysis mode
- */
-async function handleQueueMode(
-  competitors: Array<{ name: string; website?: string; description?: string }>,
-  formData: FormData
-): Promise<Response> {
-  try {
-    // Extract business context from form data
-    let businessContext = '';
-    const contextData = formData.get('businessContext');
-    if (contextData) {
-      businessContext = contextData.toString();
-    }
-
-    // Extract files if any
-    const files: string[] = [];
-    for (const [key, value] of formData.entries()) {
-      if (key.startsWith('file') && value instanceof File) {
-        files.push(value.name);
-      }
-    }
-
-    // Check cache first
-    const competitorNames = competitors.map(c => c.name);
-    const cachedResult = await cacheClient.getCachedAnalysisResult(competitorNames, businessContext);
-
-    if (cachedResult) {
-      console.log('🎯 Returning cached analysis result');
-      return Response.json({
-        success: true,
-        cached: true,
-        data: cachedResult,
-        message: 'Analysis retrieved from cache',
-      });
-    }
-
-    // Create job
-    const job = await addAnalysisJob({
-      competitors: competitorNames,
-      businessContext,
-      files,
-      analysisMode: 'standard',
-    });
-
-    console.log(`📋 Created analysis job ${job.id} for queue mode`);
-
-    return Response.json({
-      success: true,
-      useQueue: true,
-      jobId: job.id?.toString(),
-      message: `Analysis job created for ${competitors.length} competitor(s)`,
-      pollUrl: `/api/jobs/${job.id}/status`,
-      estimatedTime: estimateAnalysisTime(competitors.length, 'standard'),
-    });
-
-  } catch (error) {
-    console.error('Queue mode error:', error);
-    return Response.json(
-      {
-        error: 'Failed to create analysis job',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
-    );
-  }
-}
-
-function estimateAnalysisTime(competitorCount: number, analysisMode: string): string {
-  const baseTimeMinutes = analysisMode === 'quick' ? 2 :
-                         analysisMode === 'comprehensive' ? 8 : 4;
-
-  const totalMinutes = Math.ceil(baseTimeMinutes * competitorCount * 1.2); // Add 20% buffer
-
-  if (totalMinutes < 60) {
-    return `${totalMinutes} minute${totalMinutes !== 1 ? 's' : ''}`;
-  }
-
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-
-  if (minutes === 0) {
-    return `${hours} hour${hours !== 1 ? 's' : ''}`;
-  }
-
-  return `${hours}h ${minutes}m`;
-}
-
 export async function GET() {
   return new Response(
     JSON.stringify({
-      message: 'Streaming Competitor Intelligence Analysis API',
-      version: '1.0.0',
-      description: 'Server-Sent Events endpoint for real-time analysis progress',
-      usage: 'Send POST request with multipart form data containing files and competitors'
+      message: 'Simplified Streaming Competitor Intelligence Analysis API',
+      version: '2.0.0',
+      description: 'Server-Sent Events endpoint for real-time incremental analysis progress',
+      usage: 'Send POST request with multipart form data containing competitors'
     }),
     {
       headers: { 'Content-Type': 'application/json' }
