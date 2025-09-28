@@ -151,12 +151,16 @@ export async function POST(request: NextRequest) {
 
         // Helper to send SSE data safely with proper encoding
         const sendData = (data: Record<string, unknown>) => {
-          if (isClosed) return;
+          if (isClosed) {
+            console.warn('Attempted to send data but connection is closed:', data.type);
+            return;
+          }
           try {
             const message = `data: ${JSON.stringify(data)}\n\n`;
             controller.enqueue(encoder.encode(message));
+            console.log('Successfully sent SSE data:', data.type, data.progress || 'no-progress');
           } catch (error) {
-            console.warn('Failed to send data:', error);
+            console.error('Failed to send data:', error, 'Data type:', data.type);
             // Mark as closed if controller errors occur
             if (isControllerError(error) && (error.code === 'ERR_INVALID_STATE' || error.message?.includes('Controller is already closed'))) {
               isClosed = true;
@@ -408,12 +412,14 @@ export async function POST(request: NextRequest) {
                     }, competitors.length * 100 + 500);
                   } else {
                     // Send complete data if it's small enough
+                    console.log('Sending non-chunked completion data with', JSON.stringify(finalData).length, 'characters');
                     sendData({
                       type: 'complete',
                       progress: 100,
                       data: finalData,
                       timestamp: new Date().toISOString()
                     });
+                    sendKeepAlive(); // Ensure data is flushed
                   }
                 }
               }, 500);
