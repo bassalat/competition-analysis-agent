@@ -114,9 +114,7 @@ export function ResearchResults({
   // Format content for display with enhanced markdown support
   const formatContent = (content: string) => {
     return content
-      // Handle line breaks first
-      .replace(/\n\n/g, '</p><p class="mb-4">')
-      .replace(/\n/g, '<br>')
+      // Process markdown patterns FIRST (while newlines are still intact)
 
       // Headers with proper spacing
       .replace(/^# (.+)/gm, '<h1 class="text-2xl font-bold text-gray-900 mb-6 mt-8 border-b-2 border-blue-500 pb-3">$1</h1>')
@@ -135,6 +133,10 @@ export function ResearchResults({
 
       // Regular markdown links
       .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 underline">$1 <svg class="inline h-3 w-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg></a>')
+
+      // Handle line breaks LAST (after all markdown processing)
+      .replace(/\n\n/g, '</p><p class="mb-4">')
+      .replace(/\n/g, '<br>')
 
       // Wrap in paragraphs
       .replace(/^(?!<[h1-6]|<li|<div|<ul|<ol)/gm, '<p class="mb-4">')
