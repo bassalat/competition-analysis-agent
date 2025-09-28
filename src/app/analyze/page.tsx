@@ -27,6 +27,7 @@ interface SetupState {
   processingStage?: string;
   researchResults: Record<string, CompetitorResearchResult>;
   completedAnalyses: number;
+  currentlyAnalyzing?: string; // Track which competitor is currently being analyzed
 }
 
 export default function AnalyzePage() {
@@ -132,12 +133,20 @@ export default function AnalyzePage() {
         [competitorKey]: result,
       },
       completedAnalyses: state.completedAnalyses + 1,
+      currentlyAnalyzing: undefined, // Clear the currently analyzing state
     });
   };
 
   // Handle research start
   const handleResearchStart = (competitor: Competitor) => {
     console.log(`🚀 Starting research for ${competitor.name}`);
+    updateState({ currentlyAnalyzing: competitor.name });
+  };
+
+  // Handle research failure/error
+  const handleResearchError = (competitor: Competitor) => {
+    console.log(`❌ Research failed for ${competitor.name}`);
+    updateState({ currentlyAnalyzing: undefined }); // Clear the currently analyzing state
   };
 
   const resetToUpload = () => {
@@ -360,6 +369,8 @@ export default function AnalyzePage() {
                   businessContext={state.businessContext}
                   onResearchStart={handleResearchStart}
                   onResearchComplete={handleResearchComplete}
+                  onResearchError={handleResearchError}
+                  isDisabled={state.currentlyAnalyzing !== undefined && state.currentlyAnalyzing !== competitor.name}
                 />
               ))}
             </div>

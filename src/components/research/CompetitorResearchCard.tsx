@@ -21,6 +21,8 @@ interface CompetitorResearchCardProps {
   businessContext?: BusinessContext;
   onResearchStart?: (competitor: Competitor) => void;
   onResearchComplete?: (result: CompetitorResearchResult) => void;
+  onResearchError?: (competitor: Competitor) => void;
+  isDisabled?: boolean; // Disable the start button when another analysis is running
 }
 
 export function CompetitorResearchCard({
@@ -28,6 +30,8 @@ export function CompetitorResearchCard({
   businessContext,
   onResearchStart,
   onResearchComplete,
+  onResearchError,
+  isDisabled = false,
 }: CompetitorResearchCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isResearching, setIsResearching] = useState(false);
@@ -139,6 +143,9 @@ export function CompetitorResearchCard({
         hasError: true,
         error: errorMessage,
       } : null);
+
+      // Notify parent component about the error to clear the currently analyzing state
+      onResearchError?.(competitor);
     } finally {
       setIsResearching(false);
     }
@@ -310,13 +317,20 @@ export function CompetitorResearchCard({
               <Button
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleStartResearch();
+                  if (!isDisabled) {
+                    handleStartResearch();
+                  }
                 }}
                 size="sm"
-                className="bg-blue-600 hover:bg-blue-700"
+                disabled={isDisabled}
+                className={isDisabled
+                  ? "bg-gray-400 cursor-not-allowed text-gray-600"
+                  : "bg-blue-600 hover:bg-blue-700"
+                }
+                title={isDisabled ? "Another analysis is currently running" : "Start analysis for this competitor"}
               >
                 <Play className="h-4 w-4 mr-2" />
-                Start Analysis
+                {isDisabled ? "Waiting..." : "Start Analysis"}
               </Button>
             )}
           </div>
