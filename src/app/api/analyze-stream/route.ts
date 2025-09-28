@@ -1,14 +1,11 @@
 /**
- * Simplified Streaming Analysis API Endpoint
+ * Enhanced Streaming Analysis API Endpoint with Redis Queue Integration
  *
- * Provides real-time updates for the new 5-step competitive intelligence workflow:
- * 1. Generate search queries with Claude
- * 2. Execute searches with Serper
- * 3. Prioritize URLs with Claude
- * 4. Scrape content with Firecrawl
- * 5. Synthesize report with Claude
+ * Now supports both legacy SSE streaming and modern Redis queue-based processing:
+ * - Legacy mode: Direct SSE streaming (for backwards compatibility)
+ * - Queue mode: Redis job queue with polling (recommended for production)
  *
- * Streams progress updates via Server-Sent Events for full transparency
+ * Provides real-time updates for the 5-step competitive intelligence workflow
  */
 
 import { NextRequest } from 'next/server';
@@ -17,6 +14,8 @@ import { validateConfig } from '@/lib/config';
 import { globalCostTracker } from '@/lib/cost-tracker';
 import { getClaudeClient } from '@/lib/api-clients/claude-client';
 import { getSerperClient } from '@/lib/api-clients/serper-client';
+import { addAnalysisJob } from '@/lib/queues/analysis-queue';
+import { cacheClient } from '@/lib/cache/api-cache';
 
 // Maximum number of competitors to analyze
 const MAX_COMPETITORS = 50;
@@ -35,9 +34,13 @@ const isControllerError = (error: unknown): error is ControllerError => {
 };
 
 export async function POST(request: NextRequest) {
-  console.log('Starting simplified streaming competitive intelligence analysis...');
+  console.log('Starting enhanced competitive intelligence analysis...');
 
   try {
+    // Check for queue mode parameter
+    const url = new URL(request.url);
+    const useQueue = url.searchParams.get('queue') === 'true';
+
     // Validate configuration
     validateConfig();
 
@@ -141,8 +144,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`🚀 Streaming analysis started for ${competitors.length} competitors`);
+    console.log(`🚀 Analysis started for ${competitors.length} competitors (Mode: ${useQueue ? 'Queue' : 'SSE'})`);
 
+    // If queue mode is enabled, use Redis job queue
+    if (useQueue) {
+      return await handleQueueMode(competitors, formData);
+    }
+
+    // Legacy SSE streaming mode (for backwards compatibility)
     // Create response stream
     const stream = new ReadableStream({
       start(controller) {
@@ -592,6 +601,94 @@ export async function POST(request: NextRequest) {
       }
     );
   }
+}
+
+/**
+ * Handle queue-based analysis mode
+ */
+async function handleQueueMode(
+  competitors: Array<{ name: string; website?: string; description?: string }>,
+  formData: FormData
+): Promise<Response> {
+  try {
+    // Extract business context from form data
+    let businessContext = '';
+    const contextData = formData.get('businessContext');
+    if (contextData) {
+      businessContext = contextData.toString();
+    }
+
+    // Extract files if any
+    const files: string[] = [];
+    for (const [key, value] of formData.entries()) {
+      if (key.startsWith('file') && value instanceof File) {
+        files.push(value.name);
+      }
+    }
+
+    // Check cache first
+    const competitorNames = competitors.map(c => c.name);
+    const cachedResult = await cacheClient.getCachedAnalysisResult(competitorNames, businessContext);
+
+    if (cachedResult) {
+      console.log('🎯 Returning cached analysis result');
+      return Response.json({
+        success: true,
+        cached: true,
+        data: cachedResult,
+        message: 'Analysis retrieved from cache',
+      });
+    }
+
+    // Create job
+    const job = await addAnalysisJob({
+      competitors: competitorNames,
+      businessContext,
+      files,
+      analysisMode: 'standard',
+    });
+
+    console.log(`📋 Created analysis job ${job.id} for queue mode`);
+
+    return Response.json({
+      success: true,
+      useQueue: true,
+      jobId: job.id?.toString(),
+      message: `Analysis job created for ${competitors.length} competitor(s)`,
+      pollUrl: `/api/jobs/${job.id}/status`,
+      estimatedTime: estimateAnalysisTime(competitors.length, 'standard'),
+    });
+
+  } catch (error) {
+    console.error('Queue mode error:', error);
+    return Response.json(
+      {
+        error: 'Failed to create analysis job',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      },
+      { status: 500 }
+    );
+  }
+}
+
+function estimateAnalysisTime(competitorCount: number, analysisMode: string): string {
+  const baseTimeMinutes = analysisMode === 'quick' ? 2 :
+                         analysisMode === 'comprehensive' ? 8 : 4;
+
+  const totalMinutes = Math.ceil(baseTimeMinutes * competitorCount * 1.2); // Add 20% buffer
+
+  if (totalMinutes < 60) {
+    return `${totalMinutes} minute${totalMinutes !== 1 ? 's' : ''}`;
+  }
+
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  if (minutes === 0) {
+    return `${hours} hour${hours !== 1 ? 's' : ''}`;
+  }
+
+  return `${hours}h ${minutes}m`;
 }
 
 export async function GET() {

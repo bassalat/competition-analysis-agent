@@ -218,6 +218,141 @@ export default function AnalyzePage() {
     }
   };
 
+  const handleQueueBasedAnalysis = async (formData: FormData) => {
+    try {
+      addLog('info', 'Using Redis queue for reliable processing...');
+      updateState({ currentStage: 'Creating analysis job...', progress: 15 });
+
+      // Create analysis job
+      const createResponse = await fetch('/api/jobs/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          competitors: state.competitors.map(c => c.name),
+          businessContext: state.businessContext ? JSON.stringify(state.businessContext) : '',
+          analysisMode: 'standard',
+        }),
+      });
+
+      if (!createResponse.ok) {
+        throw new Error('Failed to create analysis job');
+      }
+
+      const jobData = await createResponse.json();
+
+      if (jobData.cached) {
+        // Results were cached
+        addLog('success', 'Analysis retrieved from cache!');
+        updateState({
+          step: 'results',
+          progress: 100,
+          currentStage: 'Analysis complete!',
+          analysisResults: jobData.data,
+        });
+        return;
+      }
+
+      const jobId = jobData.jobId;
+      addLog('info', `Job created: ${jobId}. Estimated time: ${jobData.estimatedTime}`);
+
+      updateState({
+        currentStage: `Queued for processing (ID: ${jobId})`,
+        progress: 20
+      });
+
+      // Poll for job status
+      let pollCount = 0;
+      const maxPolls = 120; // 10 minutes max (5-second intervals)
+
+      const pollInterval = setInterval(async () => {
+        try {
+          pollCount++;
+
+          const statusResponse = await fetch(`/api/jobs/${jobId}/status`);
+
+          if (!statusResponse.ok) {
+            throw new Error('Failed to get job status');
+          }
+
+          const statusData = await statusResponse.json();
+          const job = statusData.job;
+
+          // Update progress based on job status
+          let progress = 20;
+          let currentStage = 'Processing...';
+
+          switch (job.status) {
+            case 'waiting':
+              progress = 25;
+              currentStage = `Queue position: ${job.queuePosition || 1}`;
+              break;
+            case 'active':
+              progress = Math.max(30, job.progress || 30);
+              currentStage = 'Analyzing competitors...';
+              break;
+            case 'completed':
+              progress = 100;
+              currentStage = 'Analysis complete!';
+              clearInterval(pollInterval);
+
+              if (job.result?.success && job.result?.data) {
+                addLog('success', 'Analysis completed successfully!');
+                updateState({
+                  step: 'results',
+                  progress: 100,
+                  currentStage: 'Analysis complete!',
+                  analysisResults: job.result.data,
+                });
+              } else {
+                throw new Error(job.result?.error || 'Analysis failed');
+              }
+              return;
+            case 'failed':
+              clearInterval(pollInterval);
+              throw new Error(job.error || 'Analysis failed');
+            case 'stalled':
+              currentStage = 'Job stalled, retrying...';
+              addLog('warning', 'Job appears stalled, but will retry automatically');
+              break;
+          }
+
+          updateState({ progress, currentStage });
+
+          if (statusData.estimatedTimeRemaining) {
+            addLog('info', `Estimated time remaining: ${statusData.estimatedTimeRemaining}`);
+          }
+
+          // Check for timeout
+          if (pollCount >= maxPolls) {
+            clearInterval(pollInterval);
+            throw new Error('Analysis timeout - job taking too long');
+          }
+
+        } catch (error) {
+          clearInterval(pollInterval);
+          console.error('Polling error:', error);
+          addLog('error', `Polling failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          updateState({
+            error: error instanceof Error ? error.message : 'Analysis failed',
+            progress: 0,
+            currentStage: 'Analysis failed'
+          });
+        }
+      }, 5000); // Poll every 5 seconds
+
+    } catch (error) {
+      console.error('Queue analysis error:', error);
+      addLog('error', `Queue analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      updateState({
+        error: error instanceof Error ? error.message : 'Analysis failed',
+        progress: 0,
+        currentStage: 'Analysis failed'
+      });
+    }
+  };
+
   const startAnalysis = async () => {
     updateState({
       step: 'analyzing',
@@ -228,6 +363,24 @@ export default function AnalyzePage() {
     });
 
     try {
+      // Check if Redis queue is available and preferred
+      let useQueue = false;
+
+      // Only use queue in production or if explicitly enabled
+      if (window.location.hostname !== 'localhost') {
+        useQueue = true;
+      } else {
+        // In development, check if Redis is available
+        try {
+          const healthCheck = await fetch('/api/health');
+          const healthData = await healthCheck.json();
+          useQueue = healthData.services?.redis?.status === 'pass';
+        } catch (error) {
+          console.log('Health check failed, using SSE mode');
+          useQueue = false;
+        }
+      }
+
       // Prepare form data
       const formData = new FormData();
 
@@ -241,11 +394,16 @@ export default function AnalyzePage() {
 
       // Add business context if available
       if (state.businessContext) {
-        formData.append('userContext', JSON.stringify(state.businessContext));
+        formData.append('businessContext', JSON.stringify(state.businessContext));
       }
 
       // Start analysis with progress updates
       updateState({ currentStage: 'Processing documents...', progress: 10 });
+
+      if (useQueue) {
+        await handleQueueBasedAnalysis(formData);
+        return;
+      }
 
       // Detailed progress updates with realistic stages
       const progressStages = [

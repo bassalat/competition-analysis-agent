@@ -9,6 +9,7 @@ import { validateConfig } from '@/lib/config';
 import { ClaudeClient } from '@/lib/api-clients/claude-client';
 import { SerperClient } from '@/lib/api-clients/serper-client';
 import { FirecrawlClient } from '@/lib/api-clients/firecrawl-client';
+import { checkRedisConnection } from '@/lib/redis/client';
 import { HealthDetails } from '@/types/api';
 
 async function testClaudeAPI(): Promise<{ status: string; error?: string; details?: HealthDetails }> {
@@ -97,6 +98,34 @@ async function testFirecrawlAPI(): Promise<{ status: string; error?: string; det
   }
 }
 
+async function testRedisConnection(): Promise<{ status: string; error?: string; details?: HealthDetails }> {
+  try {
+    const redisHealthy = await checkRedisConnection();
+
+    if (redisHealthy) {
+      return {
+        status: 'healthy',
+        details: {
+          connected: true,
+          description: 'Redis connection active'
+        }
+      };
+    } else {
+      return {
+        status: 'unhealthy',
+        error: 'Redis connection failed',
+        details: { connected: false }
+      };
+    }
+  } catch (error) {
+    return {
+      status: 'unhealthy',
+      error: error instanceof Error ? error.message : 'Redis connection test failed',
+      details: { connected: false }
+    };
+  }
+}
+
 export async function GET() {
   try {
     console.log('🏥 Starting comprehensive health check...');
@@ -117,10 +146,11 @@ export async function GET() {
     // Test each API service
     console.log('🔍 Testing API services...');
 
-    const [claudeHealth, serperHealth, firecrawlHealth] = await Promise.allSettled([
+    const [claudeHealth, serperHealth, firecrawlHealth, redisHealth] = await Promise.allSettled([
       testClaudeAPI(),
       testSerperAPI(),
       testFirecrawlAPI(),
+      testRedisConnection(),
     ]);
 
     const getHealthResult = (result: PromiseSettledResult<{ status: string; error?: string; details?: HealthDetails }>) => {
@@ -137,13 +167,16 @@ export async function GET() {
     const claudeResult = getHealthResult(claudeHealth);
     const serperResult = getHealthResult(serperHealth);
     const firecrawlResult = getHealthResult(firecrawlHealth);
+    const redisResult = getHealthResult(redisHealth);
 
     console.log('📊 Health check results:');
     console.log('- Configuration:', configStatus);
     console.log('- Claude API:', claudeResult.status);
     console.log('- Serper API:', serperResult.status);
     console.log('- Firecrawl API:', firecrawlResult.status);
+    console.log('- Redis:', redisResult.status);
 
+    // Redis is optional - don't fail overall health if Redis is down
     const overallStatus = configStatus === 'healthy' &&
                          claudeResult.status === 'healthy' &&
                          serperResult.status === 'healthy' &&
@@ -161,6 +194,7 @@ export async function GET() {
         claude: claudeResult,
         serper: serperResult,
         firecrawl: firecrawlResult,
+        redis: redisResult,
         application: {
           status: 'healthy',
         },
@@ -170,6 +204,8 @@ export async function GET() {
         aiAnalysis: configStatus === 'healthy' && claudeResult.status === 'healthy',
         webSearch: configStatus === 'healthy' && serperResult.status === 'healthy',
         webScraping: configStatus === 'healthy' && firecrawlResult.status === 'healthy',
+        queueProcessing: redisResult.status === 'healthy',
+        streamingAnalysis: true, // Always available as fallback
       },
       summary: {
         totalServices: 4,
